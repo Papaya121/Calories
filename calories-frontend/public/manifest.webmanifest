@@ -1,0 +1,24 @@
+{
+  "name": "Calories",
+  "short_name": "Calories",
+  "description": "Weight gain tracker: фото еды, оценка КБЖУ и дневной прогресс.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6fb",
+  "theme_color": "#1f6fff",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
