@@ -17,6 +17,7 @@ export class CalendarService {
     userId: string,
     from: string,
     to: string,
+    tzOffsetMinutes = 0,
   ): Promise<{
     from: string;
     to: string;
@@ -29,11 +30,16 @@ export class CalendarService {
       mealsCount: number;
     }>;
   }> {
-    const meals = await this.mealsService.getMealsInRange(userId, from, to);
+    const meals = await this.mealsService.getMealsInRange(
+      userId,
+      from,
+      to,
+      tzOffsetMinutes,
+    );
     const dayMap = new Map<string, MacroTotals>();
 
     for (const meal of meals) {
-      const dayKey = meal.eatenAt.toISOString().slice(0, 10);
+      const dayKey = this.toClientDayKey(meal.eatenAt, tzOffsetMinutes);
       const current = dayMap.get(dayKey) ?? {
         caloriesKcal: 0,
         proteinG: 0,
@@ -72,12 +78,17 @@ export class CalendarService {
   async getDayDetails(
     userId: string,
     date: string,
+    tzOffsetMinutes = 0,
   ): Promise<{
     date: string;
     totals: MacroTotals;
     meals: Awaited<ReturnType<MealsService['getMealsByDate']>>;
   }> {
-    const meals = await this.mealsService.getMealsByDate(userId, date);
+    const meals = await this.mealsService.getMealsByDate(
+      userId,
+      date,
+      tzOffsetMinutes,
+    );
 
     const totals = meals.reduce<MacroTotals>(
       (acc, meal) => {
@@ -108,6 +119,11 @@ export class CalendarService {
       },
       meals,
     };
+  }
+
+  private toClientDayKey(value: Date, tzOffsetMinutes: number): string {
+    const adjusted = new Date(value.getTime() - tzOffsetMinutes * 60_000);
+    return adjusted.toISOString().slice(0, 10);
   }
 }
 

@@ -20,6 +20,7 @@ export type AnalyzeResult = {
   proteinG: number;
   fatG: number;
   carbsG: number;
+  estimatedWeightG: number;
   confidence: number;
 };
 

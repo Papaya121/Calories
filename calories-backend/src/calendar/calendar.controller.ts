@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../common/types/authenticated-request';
 import { CalendarRangeQueryDto } from './dto/calendar-range-query.dto';
 import { DayParamDto } from './dto/day-param.dto';
+import { DayQueryDto } from './dto/day-query.dto';
 import { CalendarService } from './calendar.service';
 
 @Controller()
@@ -20,6 +21,7 @@ export class CalendarController {
       user.userId,
       query.from,
       query.to,
+      query.tzOffsetMinutes ?? 0,
     );
   }
 
@@ -27,7 +29,12 @@ export class CalendarController {
   getDay(
     @CurrentUser() user: AuthenticatedUser,
     @Param() params: DayParamDto,
+    @Query() query: DayQueryDto,
   ): ReturnType<CalendarService['getDayDetails']> {
-    return this.calendarService.getDayDetails(user.userId, params.date);
+    return this.calendarService.getDayDetails(
+      user.userId,
+      params.date,
+      query.tzOffsetMinutes ?? 0,
+    );
   }
 }

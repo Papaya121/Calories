@@ -61,6 +61,10 @@ function withApiBase(path: string): string {
     : `${API_BASE_URL}/${path}`;
 }
 
+function getTzOffsetMinutes(): string {
+  return `${new Date().getTimezoneOffset()}`;
+}
+
 function normalizeMeal(meal: MealEntry): MealEntry {
   if (meal.photoUrl.startsWith("/uploads/")) {
     return {
@@ -373,7 +377,11 @@ export async function getDayDetails(
   token: string,
   date: string,
 ): Promise<DayDetailsResponse> {
-  return request<DayDetailsResponse>(`/days/${date}`, {
+  const query = new URLSearchParams({
+    tzOffsetMinutes: getTzOffsetMinutes(),
+  }).toString();
+
+  return request<DayDetailsResponse>(`/days/${date}?${query}`, {
     method: "GET",
     token,
   });
@@ -384,7 +392,11 @@ export async function getCalendarRange(
   from: string,
   to: string,
 ): Promise<CalendarRangeResponse> {
-  const query = new URLSearchParams({ from, to }).toString();
+  const query = new URLSearchParams({
+    from,
+    to,
+    tzOffsetMinutes: getTzOffsetMinutes(),
+  }).toString();
   return request<CalendarRangeResponse>(`/calendar?${query}`, {
     method: "GET",
     token,

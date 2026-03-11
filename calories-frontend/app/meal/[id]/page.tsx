@@ -19,7 +19,7 @@ import { formatDayTitle, formatTime } from '@/lib/date';
 import { AnalyzeResult } from '@/lib/types';
 import { useSessionStore } from '@/store/use-session-store';
 
-type DraftState = Omit<AnalyzeResult, 'confidence'> & {
+type DraftState = Omit<AnalyzeResult, 'confidence' | 'estimatedWeightG'> & {
   comment: string;
 };
 

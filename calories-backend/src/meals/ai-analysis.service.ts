@@ -19,6 +19,7 @@ export type AnalyzeOutput = {
   proteinG: number;
   fatG: number;
   carbsG: number;
+  estimatedWeightG: number;
   confidence: number;
   aiModel: string;
   needsUserConfirmation: boolean;
@@ -109,15 +110,30 @@ export class AiAnalysisService {
     const dishDescription =
       this.pickString(aiPayload, ['dishDescription', 'dish_description']) ??
       this.descriptionFromComment(input.comment);
+    const caloriesKcal =
+      this.pickNumber(aiPayload, ['caloriesKcal', 'calories_kcal']) ?? 600;
+    const proteinG = this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28;
+    const fatG = this.pickNumber(aiPayload, ['fatG', 'fat_g']) ?? 22;
+    const carbsG = this.pickNumber(aiPayload, ['carbsG', 'carbs_g']) ?? 68;
+    const estimatedWeightG =
+      this.pickNumber(aiPayload, [
+        'estimatedWeightG',
+        'estimated_weight_g',
+        'portionWeightG',
+        'portion_weight_g',
+        'weightG',
+        'weight_g',
+        'grams',
+      ]) ?? this.estimateWeightFromCalories(caloriesKcal);
 
     return {
       dishName,
       dishDescription,
-      caloriesKcal:
-        this.pickNumber(aiPayload, ['caloriesKcal', 'calories_kcal']) ?? 600,
-      proteinG: this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28,
-      fatG: this.pickNumber(aiPayload, ['fatG', 'fat_g']) ?? 22,
-      carbsG: this.pickNumber(aiPayload, ['carbsG', 'carbs_g']) ?? 68,
+      caloriesKcal,
+      proteinG,
+      fatG,
+      carbsG,
+      estimatedWeightG: this.normalizeWeightG(estimatedWeightG),
       confidence: this.clamp01(
         this.pickNumber(aiPayload, ['confidence']) ?? 0.68,
       ),
@@ -143,6 +159,7 @@ export class AiAnalysisService {
     const protein = Math.round((20 + commentLength * 0.25) * 10) / 10;
     const fat = Math.round((16 + commentLength * 0.18) * 10) / 10;
     const carbs = Math.round((55 + commentLength * 0.32) * 10) / 10;
+    const estimatedWeightG = this.estimateWeightFromCalories(calories);
 
     return {
       dishName: 'Блюдо по фото (заглушка)',
@@ -151,6 +168,7 @@ export class AiAnalysisService {
       proteinG: protein,
       fatG: fat,
       carbsG: carbs,
+      estimatedWeightG,
       confidence: 0.54,
       aiModel,
       needsUserConfirmation: true,
@@ -221,7 +239,8 @@ export class AiAnalysisService {
     return [
       'Оцени блюдо по фото и ответь строго JSON-объектом без пояснений.',
       'Поля JSON:',
-      'dish_name, dish_description, calories_kcal, protein_g, fat_g, carbs_g, confidence, needs_user_confirmation.',
+      'dish_name, dish_description, calories_kcal, protein_g, fat_g, carbs_g, estimated_weight_g, confidence, needs_user_confirmation.',
+      'estimated_weight_g должен быть весом порции в граммах (примерно).',
       'confidence должен быть числом от 0 до 1.',
       `Комментарий пользователя: ${normalizedComment ? normalizedComment : 'не указан'}.`,
       imageLine,
@@ -489,6 +508,8 @@ export class AiAnalysisService {
       'fatG',
       'carbs_g',
       'carbsG',
+      'estimated_weight_g',
+      'estimatedWeightG',
       'confidence',
     ].some((key) => key in payload);
   }
@@ -605,6 +626,27 @@ export class AiAnalysisService {
 
     if (value > 1) {
       return 1;
+    }
+
+    return value;
+  }
+
+  private normalizeWeightG(weightG: number): number {
+    return Math.round(this.clampRange(weightG, 30, 2_000));
+  }
+
+  private estimateWeightFromCalories(caloriesKcal: number): number {
+    const estimatedWeight = caloriesKcal / 1.7;
+    return this.normalizeWeightG(estimatedWeight);
+  }
+
+  private clampRange(value: number, min: number, max: number): number {
+    if (value < min) {
+      return min;
+    }
+
+    if (value > max) {
+      return max;
     }
 
     return value;

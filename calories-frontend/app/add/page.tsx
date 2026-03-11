@@ -24,6 +24,7 @@ const EMPTY_RESULT: AnalyzeResult = {
   proteinG: 0,
   fatG: 0,
   carbsG: 0,
+  estimatedWeightG: 0,
   confidence: 0,
 };
 
@@ -71,6 +72,7 @@ export default function AddMealPage() {
         proteinG: data.proteinG,
         fatG: data.fatG,
         carbsG: data.carbsG,
+        estimatedWeightG: data.estimatedWeightG,
         confidence: data.confidence,
       });
       setAnalyzedPhotoPath(data.photoPath);
@@ -131,6 +133,38 @@ export default function AddMealPage() {
     () => Math.round(result.confidence * 100),
     [result.confidence],
   );
+  const estimatedWeightG = useMemo(
+    () => {
+      const parsed = Number(result.estimatedWeightG);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return 0;
+      }
+
+      return Math.round(parsed);
+    },
+    [result.estimatedWeightG],
+  );
+  const macrosPer100g = useMemo(() => {
+    if (estimatedWeightG <= 0) {
+      return null;
+    }
+
+    const factor = 100 / estimatedWeightG;
+    const roundOne = (value: number) => Math.round(value * factor * 10) / 10;
+
+    return {
+      caloriesKcal: Math.round(result.caloriesKcal * factor),
+      proteinG: roundOne(result.proteinG),
+      fatG: roundOne(result.fatG),
+      carbsG: roundOne(result.carbsG),
+    };
+  }, [
+    estimatedWeightG,
+    result.caloriesKcal,
+    result.proteinG,
+    result.fatG,
+    result.carbsG,
+  ]);
 
   const onPhotoPick = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -270,6 +304,10 @@ export default function AddMealPage() {
                 />
               </label>
 
+              <p className="text-sm font-medium text-text">
+                {estimatedWeightG > 0 ? `~${estimatedWeightG} г` : '~? г'}
+              </p>
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm text-subtext">
                   Ккал
@@ -318,6 +356,13 @@ export default function AddMealPage() {
             >
               {saveMutation.isPending ? 'Сохраняем...' : 'Сохранить запись'}
             </button>
+
+            {macrosPer100g ? (
+              <p className="mt-2 text-[11px] text-subtext">
+                На 100 г: {macrosPer100g.caloriesKcal} ккал · Б {macrosPer100g.proteinG} г · Ж{' '}
+                {macrosPer100g.fatG} г · У {macrosPer100g.carbsG} г
+              </p>
+            ) : null}
           </div>
         ) : null}
 

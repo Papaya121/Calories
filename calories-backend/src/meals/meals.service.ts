@@ -50,6 +50,7 @@ export class MealsService {
     proteinG: number;
     fatG: number;
     carbsG: number;
+    estimatedWeightG: number;
     confidence: number;
     aiModel: string;
     needsUserConfirmation: boolean;
@@ -76,6 +77,7 @@ export class MealsService {
       proteinG: aiResult.proteinG,
       fatG: aiResult.fatG,
       carbsG: aiResult.carbsG,
+      estimatedWeightG: aiResult.estimatedWeightG,
       confidence: aiResult.confidence,
       aiModel: aiResult.aiModel,
       needsUserConfirmation: aiResult.needsUserConfirmation,
@@ -245,9 +247,12 @@ export class MealsService {
     await this.mealEntriesRepository.remove(meal);
   }
 
-  async getMealsByDate(userId: string, date: string): Promise<MealResponse[]> {
-    const start = new Date(`${date}T00:00:00.000Z`);
-    const end = new Date(`${date}T23:59:59.999Z`);
+  async getMealsByDate(
+    userId: string,
+    date: string,
+    tzOffsetMinutes = 0,
+  ): Promise<MealResponse[]> {
+    const { start, end } = this.resolveUtcDayWindow(date, tzOffsetMinutes);
 
     const meals = await this.mealEntriesRepository.find({
       where: {
@@ -265,9 +270,10 @@ export class MealsService {
     userId: string,
     from: string,
     to: string,
+    tzOffsetMinutes = 0,
   ): Promise<MealEntryEntity[]> {
-    const fromDate = new Date(`${from}T00:00:00.000Z`);
-    const toDate = new Date(`${to}T23:59:59.999Z`);
+    const { start: fromDate } = this.resolveUtcDayWindow(from, tzOffsetMinutes);
+    const { end: toDate } = this.resolveUtcDayWindow(to, tzOffsetMinutes);
 
     return this.mealEntriesRepository.find({
       where: {
@@ -307,5 +313,16 @@ export class MealsService {
     const filePath = path.join(process.cwd(), 'uploads', storageKey);
     const fileStats = await stat(filePath);
     return fileStats.size;
+  }
+
+  private resolveUtcDayWindow(
+    date: string,
+    tzOffsetMinutes: number,
+  ): { start: Date; end: Date } {
+    const [year, month, day] = date.split('-').map(Number);
+    const startMs =
+      Date.UTC(year, (month || 1) - 1, day || 1) + tzOffsetMinutes * 60_000;
+    const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
+    return { start: new Date(startMs), end: new Date(endMs) };
   }
 }
