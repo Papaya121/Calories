@@ -18,6 +18,7 @@ import {
 import type {
   ActivityLevel,
   BiologicalSex,
+  GoalType,
 } from '../database/entities/user.entity';
 import { BootstrapDto } from './dto/bootstrap.dto';
 import { PasscodeLoginDto } from './dto/passcode-login.dto';
@@ -59,6 +60,7 @@ type UserProfileResult = {
   heightCm: number | null;
   ageYears: number | null;
   activityLevel: ActivityLevel | null;
+  goalType: GoalType | null;
   isComplete: boolean;
   kcalTargets: CalorieTargets | null;
 };
@@ -137,6 +139,7 @@ export class AuthService {
     user.heightCm = dto.heightCm;
     user.ageYears = dto.ageYears;
     user.activityLevel = dto.activityLevel;
+    user.goalType = dto.goalType;
     const saved = await this.usersRepository.save(user);
 
     return this.buildUserProfile(saved);
@@ -293,9 +296,15 @@ export class AuthService {
     const ageYears =
       typeof user.ageYears === 'number' ? Math.round(user.ageYears) : null;
     const activityLevel = user.activityLevel;
+    const goalType = user.goalType;
     const biologicalSex = user.biologicalSex;
     const isComplete = Boolean(
-      biologicalSex && weightKg && heightCm && ageYears && activityLevel,
+      biologicalSex &&
+        weightKg &&
+        heightCm &&
+        ageYears &&
+        activityLevel &&
+        goalType,
     );
 
     if (
@@ -304,7 +313,8 @@ export class AuthService {
       !weightKg ||
       !heightCm ||
       !ageYears ||
-      !activityLevel
+      !activityLevel ||
+      !goalType
     ) {
       return {
         biologicalSex,
@@ -312,6 +322,7 @@ export class AuthService {
         heightCm,
         ageYears,
         activityLevel,
+        goalType,
         isComplete: false,
         kcalTargets: null,
       };
@@ -323,6 +334,7 @@ export class AuthService {
       heightCm,
       ageYears,
       activityLevel,
+      goalType,
       isComplete: true,
       kcalTargets: this.calculateCalorieTargets(
         biologicalSex,

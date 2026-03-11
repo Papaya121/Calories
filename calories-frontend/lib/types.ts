@@ -56,6 +56,8 @@ export type ActivityLevel =
   | 'active'
   | 'very_active';
 
+export type GoalType = 'lose' | 'maintain' | 'gain';
+
 export type CalorieTargets = {
   lose: number;
   maintain: number;
@@ -68,6 +70,7 @@ export type UserProfile = {
   heightCm: number | null;
   ageYears: number | null;
   activityLevel: ActivityLevel | null;
+  goalType: GoalType | null;
   isComplete: boolean;
   kcalTargets: CalorieTargets | null;
 };

@@ -7,6 +7,7 @@ import {
   ActivityLevel,
   BiologicalSex,
   CalorieTargets,
+  GoalType,
   UserProfile,
 } from '@/lib/types';
 
@@ -20,6 +21,7 @@ type ProfileSettingsFormProps = {
     heightCm: number;
     ageYears: number;
     activityLevel: ActivityLevel;
+    goalType: GoalType;
   }) => void;
 };
 
@@ -59,6 +61,28 @@ const ACTIVITY_OPTIONS: Array<{
   },
 ];
 
+const GOAL_OPTIONS: Array<{
+  value: GoalType;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'lose',
+    label: 'Похудение',
+    description: 'Дефицит калорий',
+  },
+  {
+    value: 'maintain',
+    label: 'Поддержание',
+    description: 'Стабильный вес',
+  },
+  {
+    value: 'gain',
+    label: 'Набор',
+    description: 'Профицит калорий',
+  },
+];
+
 export function ProfileSettingsForm({
   profile,
   isPending,
@@ -80,6 +104,9 @@ export function ProfileSettingsForm({
   const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(
     profile?.activityLevel ?? null,
   );
+  const [goalType, setGoalType] = useState<GoalType | null>(
+    profile?.goalType ?? null,
+  );
   const [localError, setLocalError] = useState('');
 
   useEffect(() => {
@@ -88,10 +115,12 @@ export function ProfileSettingsForm({
     setHeightCm(profile?.heightCm ? String(profile.heightCm) : '');
     setAgeYears(profile?.ageYears ? String(profile.ageYears) : '');
     setActivityLevel(profile?.activityLevel ?? null);
+    setGoalType(profile?.goalType ?? null);
   }, [
     profile?.activityLevel,
     profile?.ageYears,
     profile?.biologicalSex,
+    profile?.goalType,
     profile?.heightCm,
     profile?.weightKg,
   ]);
@@ -156,6 +185,11 @@ export function ProfileSettingsForm({
       return;
     }
 
+    if (!goalType) {
+      setLocalError('Выберите цель.');
+      return;
+    }
+
     if (!WEIGHT_REGEX.test(weightKg.trim())) {
       setLocalError('Вес должен быть в формате 70 или 70.5');
       return;
@@ -197,6 +231,7 @@ export function ProfileSettingsForm({
       heightCm: Math.round(normalizedHeight),
       ageYears: Math.round(normalizedAge),
       activityLevel,
+      goalType,
     });
   };
 
@@ -214,7 +249,7 @@ export function ProfileSettingsForm({
             }}
             className={`rounded-2xl border px-3 py-3 text-sm transition-all duration-200 ease-ios ${
               biologicalSex === 'male'
-                ? 'border-accent bg-accent/10 text-text'
+                ? 'border-accent bg-accent text-white shadow-soft'
                 : 'border-white/80 bg-white text-subtext hover:bg-muted'
             }`}
           >
@@ -229,7 +264,7 @@ export function ProfileSettingsForm({
             }}
             className={`rounded-2xl border px-3 py-3 text-sm transition-all duration-200 ease-ios ${
               biologicalSex === 'female'
-                ? 'border-accent bg-accent/10 text-text'
+                ? 'border-accent bg-accent text-white shadow-soft'
                 : 'border-white/80 bg-white text-subtext hover:bg-muted'
             }`}
           >
@@ -281,6 +316,40 @@ export function ProfileSettingsForm({
       </label>
 
       <div className="space-y-2">
+        <p className="text-sm text-subtext">Цель</p>
+        <div className="grid grid-cols-3 gap-2">
+          {GOAL_OPTIONS.map((option) => {
+            const isSelected = goalType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setLocalError('');
+                  setGoalType(option.value);
+                }}
+                className={`rounded-2xl border px-3 py-3 text-center transition-all duration-200 ease-ios ${
+                  isSelected
+                    ? 'border-accent bg-accent text-white shadow-soft'
+                    : 'border-white/80 bg-white text-subtext hover:bg-muted'
+                }`}
+              >
+                <p className="text-sm font-medium">{option.label}</p>
+                <p
+                  className={`mt-1 text-[10px] ${
+                    isSelected ? 'text-white/85' : 'text-subtext'
+                  }`}
+                >
+                  {option.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <p className="text-sm text-subtext">Уровень активности</p>
         <div className="grid gap-2">
           {ACTIVITY_OPTIONS.map((option) => {
@@ -296,7 +365,7 @@ export function ProfileSettingsForm({
                 }}
                 className={`rounded-2xl border px-3 py-3 text-left transition-all duration-200 ease-ios ${
                   isSelected
-                    ? 'border-accent bg-accent/10'
+                    ? 'border-accent bg-accent/10 shadow-soft'
                     : 'border-white/80 bg-white hover:bg-muted'
                 }`}
               >

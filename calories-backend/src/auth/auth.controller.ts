@@ -55,6 +55,7 @@ export class AuthController {
         | 'active'
         | 'very_active'
         | null;
+      goalType: 'lose' | 'maintain' | 'gain' | null;
       isComplete: boolean;
       kcalTargets: {
         lose: number;
@@ -86,6 +87,7 @@ export class AuthController {
         | 'active'
         | 'very_active'
         | null;
+      goalType: 'lose' | 'maintain' | 'gain' | null;
       isComplete: boolean;
       kcalTargets: {
         lose: number;

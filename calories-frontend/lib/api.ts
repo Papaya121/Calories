@@ -6,6 +6,7 @@ import {
   BiologicalSex,
   CalendarRangeResponse,
   DayDetailsResponse,
+  GoalType,
   MealEntry,
   UserProfile,
 } from "@/lib/types";
@@ -189,6 +190,7 @@ export async function updateMyProfile(
     heightCm: number;
     ageYears: number;
     activityLevel: ActivityLevel;
+    goalType: GoalType;
   },
 ): Promise<UserProfile> {
   const response = await request<{ profile: UserProfile }>("/auth/profile", {

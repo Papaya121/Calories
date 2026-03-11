@@ -21,4 +21,7 @@ export class UpdateProfileDto {
 
   @IsIn(['sedentary', 'light', 'moderate', 'active', 'very_active'])
   activityLevel!: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+
+  @IsIn(['lose', 'maintain', 'gain'])
+  goalType!: 'lose' | 'maintain' | 'gain';
 }

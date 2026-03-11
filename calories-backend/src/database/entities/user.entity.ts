@@ -19,6 +19,7 @@ export type ActivityLevel =
   | 'moderate'
   | 'active'
   | 'very_active';
+export type GoalType = 'lose' | 'maintain' | 'gain';
 
 @Entity({ name: 'users' })
 export class UserEntity {
@@ -60,6 +61,14 @@ export class UserEntity {
     nullable: true,
   })
   activityLevel!: ActivityLevel | null;
+
+  @Column({
+    name: 'goal_type',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  goalType!: GoalType | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

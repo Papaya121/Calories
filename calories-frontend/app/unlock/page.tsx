@@ -59,6 +59,7 @@ export default function UnlockPage() {
   const [setupPasscode, setSetupPasscode] = useState('');
   const [confirmSetupPasscode, setConfirmSetupPasscode] = useState('');
   const [loginPasscode, setLoginPasscode] = useState('');
+  const [accountsExpanded, setAccountsExpanded] = useState(false);
   const [error, setError] = useState('');
 
   const accountsQuery = useQuery({
@@ -139,6 +140,8 @@ export default function UnlockPage() {
   const hasAccounts = accounts.length > 0;
   const selectedAccount =
     accounts.find((account) => account.id === selectedAccountId) ?? null;
+  const visibleAccount = selectedAccount ?? accounts[accounts.length - 1] ?? null;
+  const activeAccountForLogin = selectedAccount ?? visibleAccount;
 
   useEffect(() => {
     if (accounts.length === 0) {
@@ -149,7 +152,7 @@ export default function UnlockPage() {
       return;
     }
 
-    setSelectedAccountId(accounts[0].id);
+    setSelectedAccountId(accounts[accounts.length - 1].id);
   }, [accounts, selectedAccountId, setSelectedAccountId]);
 
   if (!hasHydrated) {
@@ -207,13 +210,13 @@ export default function UnlockPage() {
       return;
     }
 
-    if (!selectedAccount) {
+    if (!activeAccountForLogin) {
       setError('Сначала выберите профиль.');
       return;
     }
 
     loginMutation.mutate({
-      userId: selectedAccount.id,
+      userId: activeAccountForLogin.id,
       passcode: loginPasscode,
     });
   };
@@ -226,12 +229,12 @@ export default function UnlockPage() {
       return;
     }
 
-    if (!selectedAccount) {
+    if (!activeAccountForLogin) {
       setError('Сначала выберите профиль.');
       return;
     }
 
-    biometricMutation.mutate(selectedAccount.id);
+    biometricMutation.mutate(activeAccountForLogin.id);
   };
 
   const handleSelectAccount = (accountId: string) => {
@@ -240,6 +243,7 @@ export default function UnlockPage() {
     }
 
     setSelectedAccountId(accountId);
+    setAccountsExpanded(false);
     setLoginPasscode('');
     setError('');
   };
@@ -348,31 +352,69 @@ export default function UnlockPage() {
           <form onSubmit={handleUnlockSubmit} className="space-y-4">
             <div className="space-y-2">
               <p className="text-sm text-subtext">Аккаунт</p>
-              <div className="grid gap-2">
-                {accounts.map((account, index) => {
-                  const isSelected = selectedAccount?.id === account.id;
-                  return (
-                    <button
-                      key={account.id}
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => handleSelectAccount(account.id)}
-                      className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ease-ios ${
-                        isSelected
-                          ? 'border-accent bg-accent/10 text-text'
-                          : 'border-white/80 bg-white text-subtext hover:bg-muted'
-                      }`}
-                    >
-                      <span className="block text-sm font-medium text-text">
-                        {getAccountLabel(account, index)}
-                      </span>
-                      <span className="mt-1 block text-xs">
-                        {isSelected ? 'Выбран профиль' : 'Нажмите, чтобы выбрать'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => setAccountsExpanded((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-2xl border border-accent bg-accent/10 px-4 py-3 text-left transition-all duration-200 ease-ios hover:brightness-105"
+              >
+                <span>
+                  <span className="block text-sm font-medium text-text">
+                    {visibleAccount
+                      ? getAccountLabel(
+                          visibleAccount,
+                          Math.max(
+                            0,
+                            accounts.findIndex(
+                              (account) => account.id === visibleAccount.id,
+                            ),
+                          ),
+                        )
+                      : 'Профиль не выбран'}
+                  </span>
+                  <span className="mt-1 block text-xs text-subtext">
+                    {accountsExpanded ? 'Свернуть список' : 'Показать все профили'}
+                  </span>
+                </span>
+                <span className="text-sm text-subtext">
+                  {accountsExpanded ? '▲' : '▼'}
+                </span>
+              </button>
+              {accountsExpanded ? (
+                <div className="grid gap-2">
+                  {accounts.map((account, index) => {
+                    const isSelected = selectedAccount?.id === account.id;
+                    return (
+                      <button
+                        key={account.id}
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleSelectAccount(account.id)}
+                        className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ease-ios ${
+                          isSelected
+                            ? 'border-accent bg-accent text-white shadow-soft'
+                            : 'border-white/80 bg-white text-subtext hover:bg-muted'
+                        }`}
+                      >
+                        <span
+                          className={`block text-sm font-medium ${
+                            isSelected ? 'text-white' : 'text-text'
+                          }`}
+                        >
+                          {getAccountLabel(account, index)}
+                        </span>
+                        <span
+                          className={`mt-1 block text-xs ${
+                            isSelected ? 'text-white/80' : ''
+                          }`}
+                        >
+                          {isSelected ? 'Выбран профиль' : 'Нажмите, чтобы выбрать'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
             <label className="block text-sm text-subtext">
               PIN-код

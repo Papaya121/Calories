@@ -4,13 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect } from 'react';
 
-import { authLogout, ApiError, getDayDetails } from '@/lib/api';
+import { authLogout, ApiError, getDayDetails, getMyProfile } from '@/lib/api';
 import { AuthGate } from '@/components/auth-gate';
 import { MacroGrid } from '@/components/macro-grid';
 import { MealCard } from '@/components/meal-card';
 import { ScreenShell } from '@/components/screen-shell';
 import { formatDayTitle, toDateKey } from '@/lib/date';
 import { useSessionStore } from '@/store/use-session-store';
+import { GoalType } from '@/lib/types';
 
 const EMPTY_TOTALS = {
   caloriesKcal: 0,
@@ -23,6 +24,7 @@ const EMPTY_TOTALS = {
 export default function TodayPage() {
   const todayKey = toDateKey(new Date());
   const accessToken = useSessionStore((state) => state.accessToken);
+  const userId = useSessionStore((state) => state.user?.id ?? null);
   const lock = useSessionStore((state) => state.lock);
 
   const dayQuery = useQuery({
@@ -31,14 +33,36 @@ export default function TodayPage() {
     enabled: Boolean(accessToken),
   });
 
+  const profileQuery = useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => getMyProfile(accessToken as string),
+    enabled: Boolean(accessToken && userId),
+  });
+
   useEffect(() => {
     if (dayQuery.error instanceof ApiError && dayQuery.error.status === 401) {
       lock();
     }
   }, [dayQuery.error, lock]);
 
+  useEffect(() => {
+    if (profileQuery.error instanceof ApiError && profileQuery.error.status === 401) {
+      lock();
+    }
+  }, [lock, profileQuery.error]);
+
   const meals = dayQuery.data?.meals || [];
   const totals = dayQuery.data?.totals || EMPTY_TOTALS;
+  const profile = profileQuery.data;
+  const selectedGoal = profile?.goalType;
+  const dailyGoalKcal = getDailyGoalKcal(
+    selectedGoal,
+    profile?.kcalTargets ?? null,
+  );
+  const remainingKcal =
+    typeof dailyGoalKcal === 'number' ? dailyGoalKcal - totals.caloriesKcal : null;
+  const goalTitle = getGoalTitle(selectedGoal);
+  const goalMessage = getGoalMessage(selectedGoal, remainingKcal);
 
   const handleLock = () => {
     authLogout().catch(() => undefined);
@@ -56,6 +80,21 @@ export default function TodayPage() {
           >
             Заблокировать
           </button>
+        </div>
+
+        <div className="rounded-3xl border border-white/80 bg-card px-4 py-3 shadow-card">
+          {goalTitle && goalMessage && typeof dailyGoalKcal === 'number' ? (
+            <div className="space-y-1">
+              <p className="text-xs text-subtext">
+                Цель: {goalTitle} · {dailyGoalKcal} ккал/день
+              </p>
+              <p className="text-sm font-medium text-text">{goalMessage}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-subtext">
+              Цель по калориям не выбрана. Откройте настройки и задайте цель.
+            </p>
+          )}
         </div>
 
         <MacroGrid
@@ -103,4 +142,62 @@ export default function TodayPage() {
       </ScreenShell>
     </AuthGate>
   );
+}
+
+function getGoalTitle(goalType: GoalType | null | undefined): string | null {
+  if (goalType === 'lose') {
+    return 'Похудение';
+  }
+
+  if (goalType === 'maintain') {
+    return 'Поддержание';
+  }
+
+  if (goalType === 'gain') {
+    return 'Набор';
+  }
+
+  return null;
+}
+
+function getDailyGoalKcal(
+  goalType: GoalType | null | undefined,
+  targets: {
+    lose: number;
+    maintain: number;
+    gain: number;
+  } | null,
+): number | null {
+  if (!goalType || !targets) {
+    return null;
+  }
+
+  return targets[goalType];
+}
+
+function getGoalMessage(
+  goalType: GoalType | null | undefined,
+  remainingKcal: number | null,
+): string | null {
+  if (!goalType || remainingKcal === null) {
+    return null;
+  }
+
+  if (goalType === 'lose') {
+    if (remainingKcal >= 0) {
+      return `До лимита осталось ${remainingKcal} ккал`;
+    }
+
+    return `Лимит превышен на ${Math.abs(remainingKcal)} ккал`;
+  }
+
+  if (remainingKcal > 0) {
+    return `Осталось добрать ${remainingKcal} ккал`;
+  }
+
+  if (remainingKcal === 0) {
+    return 'Цель по калориям выполнена точно';
+  }
+
+  return `Цель выполнена, превышение ${Math.abs(remainingKcal)} ккал`;
 }
