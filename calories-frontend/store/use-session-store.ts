@@ -6,13 +6,13 @@ import { persist } from 'zustand/middleware';
 import { AuthSession, SessionUser } from '@/lib/types';
 
 type SessionState = {
-  passcode: string | null;
+  selectedAccountId: string | null;
   biometricEnabled: boolean;
   accessToken: string | null;
   user: SessionUser | null;
   isUnlocked: boolean;
   hasHydrated: boolean;
-  setPasscode: (passcode: string) => void;
+  setSelectedAccountId: (accountId: string | null) => void;
   setAuthSession: (session: AuthSession) => void;
   lock: () => void;
   toggleBiometrics: (enabled: boolean) => void;
@@ -22,16 +22,17 @@ type SessionState = {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
-      passcode: null,
+      selectedAccountId: null,
       biometricEnabled: false,
       accessToken: null,
       user: null,
       isUnlocked: false,
       hasHydrated: false,
-      setPasscode: (passcode) => set({ passcode }),
+      setSelectedAccountId: (selectedAccountId) => set({ selectedAccountId }),
       setAuthSession: (session) =>
         set({
           accessToken: session.accessToken,
+          selectedAccountId: session.user.id,
           user: session.user,
           isUnlocked: true
         }),
@@ -40,9 +41,9 @@ export const useSessionStore = create<SessionState>()(
       setHasHydrated: (value) => set({ hasHydrated: value })
     }),
     {
-      name: 'calories-session-v1',
+      name: 'calories-session-v2',
       partialize: (state) => ({
-        passcode: state.passcode,
+        selectedAccountId: state.selectedAccountId,
         biometricEnabled: state.biometricEnabled
       }),
       onRehydrateStorage: () => (state) => {

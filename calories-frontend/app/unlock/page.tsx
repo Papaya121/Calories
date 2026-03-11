@@ -1,16 +1,18 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import { ScreenShell } from '@/components/screen-shell';
 import {
+  authListAccounts,
   authBootstrap,
   authPasscodeLogin,
   authWebauthnVerify,
   getApiErrorMessage,
 } from '@/lib/api';
+import { AuthAccount } from '@/lib/types';
 import { useSessionStore } from '@/store/use-session-store';
 
 const PASSCODE_REGEX = /^\d{6}$/;
@@ -33,32 +35,49 @@ function buildAssertionId(): string {
   return `webauthn-${Date.now()}`;
 }
 
+function getAccountLabel(account: AuthAccount, index: number): string {
+  const trimmedName = account.displayName?.trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  return `Профиль ${index + 1}`;
+}
+
 export default function UnlockPage() {
   const router = useRouter();
-  const passcode = useSessionStore((state) => state.passcode);
+  const selectedAccountId = useSessionStore((state) => state.selectedAccountId);
   const hasHydrated = useSessionStore((state) => state.hasHydrated);
   const biometricEnabled = useSessionStore((state) => state.biometricEnabled);
-  const setPasscode = useSessionStore((state) => state.setPasscode);
+  const setSelectedAccountId = useSessionStore(
+    (state) => state.setSelectedAccountId,
+  );
   const setAuthSession = useSessionStore((state) => state.setAuthSession);
   const toggleBiometrics = useSessionStore((state) => state.toggleBiometrics);
 
-  const isSetupMode = useMemo(() => !passcode, [passcode]);
-
-  const [draftPasscode, setDraftPasscode] = useState('');
-  const [confirmPasscode, setConfirmPasscode] = useState('');
+  const [setupDisplayName, setSetupDisplayName] = useState('');
+  const [setupPasscode, setSetupPasscode] = useState('');
+  const [confirmSetupPasscode, setConfirmSetupPasscode] = useState('');
   const [loginPasscode, setLoginPasscode] = useState('');
   const [error, setError] = useState('');
 
+  const accountsQuery = useQuery({
+    queryKey: ['auth', 'accounts'],
+    queryFn: authListAccounts,
+    enabled: hasHydrated,
+  });
+
   const bootstrapMutation = useMutation({
-    mutationFn: async (nextPasscode: string) =>
+    mutationFn: async (payload: { passcode: string; displayName: string }) =>
       authBootstrap({
-        passcode: nextPasscode,
+        passcode: payload.passcode,
+        displayName: payload.displayName,
         deviceName: getDeviceName(),
       }),
-    onSuccess: (session, usedPasscode) => {
-      setPasscode(usedPasscode);
+    onSuccess: (session) => {
+      setSelectedAccountId(session.user.id);
       setAuthSession(session);
-      router.replace('/today');
+      router.replace('/profile-setup');
     },
     onError: (err) => {
       setError(
@@ -71,37 +90,41 @@ export default function UnlockPage() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (nextPasscode: string) =>
+    mutationFn: async (payload: { userId: string; passcode: string }) =>
       authPasscodeLogin({
-        passcode: nextPasscode,
+        userId: payload.userId,
+        passcode: payload.passcode,
         deviceName: getDeviceName(),
       }),
     onSuccess: (session) => {
+      setSelectedAccountId(session.user.id);
       setAuthSession(session);
-      router.replace('/today');
+      router.replace('/profile-setup');
     },
     onError: (err) => {
       setError(
-        getApiErrorMessage(err, 'Не удалось выполнить вход. Проверьте passcode.'),
+        getApiErrorMessage(err, 'Не удалось выполнить вход. Проверьте PIN-код.'),
       );
     },
   });
 
   const biometricMutation = useMutation({
-    mutationFn: async () =>
+    mutationFn: async (userId: string) =>
       authWebauthnVerify({
         assertionId: buildAssertionId(),
+        userId,
         deviceName: getDeviceName(),
       }),
     onSuccess: (session) => {
+      setSelectedAccountId(session.user.id);
       setAuthSession(session);
-      router.replace('/today');
+      router.replace('/profile-setup');
     },
     onError: (err) => {
       setError(
         getApiErrorMessage(
           err,
-          'Биометрическая разблокировка не удалась. Используйте passcode.',
+          'Биометрическая разблокировка не удалась. Используйте PIN-код.',
         ),
       );
     },
@@ -112,9 +135,30 @@ export default function UnlockPage() {
     loginMutation.isPending ||
     biometricMutation.isPending;
 
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const hasAccounts = accounts.length > 0;
+  const selectedAccount =
+    accounts.find((account) => account.id === selectedAccountId) ?? null;
+
+  useEffect(() => {
+    if (accounts.length === 0) {
+      return;
+    }
+
+    if (selectedAccountId && accounts.some((account) => account.id === selectedAccountId)) {
+      return;
+    }
+
+    setSelectedAccountId(accounts[0].id);
+  }, [accounts, selectedAccountId, setSelectedAccountId]);
+
   if (!hasHydrated) {
     return (
-      <ScreenShell title="Calories" subtitle="Проверяем состояние приложения" showNav={false}>
+      <ScreenShell
+        title="Calories"
+        subtitle="Проверяем состояние приложения"
+        showNav={false}
+      >
         <div className="rounded-3xl border border-white/80 bg-card p-6 text-sm text-subtext shadow-card">
           Загружаем настройки...
         </div>
@@ -124,23 +168,38 @@ export default function UnlockPage() {
 
   const handleSetupSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isPending) {
+      return;
+    }
     setError('');
 
-    if (!PASSCODE_REGEX.test(draftPasscode)) {
+    const normalizedDisplayName = setupDisplayName.trim();
+    if (!normalizedDisplayName) {
+      setError('Введите имя профиля.');
+      return;
+    }
+
+    if (!PASSCODE_REGEX.test(setupPasscode)) {
       setError('Нужен код ровно из 6 цифр.');
       return;
     }
 
-    if (draftPasscode !== confirmPasscode) {
+    if (setupPasscode !== confirmSetupPasscode) {
       setError('Коды не совпадают.');
       return;
     }
 
-    bootstrapMutation.mutate(draftPasscode);
+    bootstrapMutation.mutate({
+      passcode: setupPasscode,
+      displayName: normalizedDisplayName,
+    });
   };
 
   const handleUnlockSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isPending) {
+      return;
+    }
     setError('');
 
     if (!PASSCODE_REGEX.test(loginPasscode)) {
@@ -148,7 +207,15 @@ export default function UnlockPage() {
       return;
     }
 
-    loginMutation.mutate(loginPasscode);
+    if (!selectedAccount) {
+      setError('Сначала выберите профиль.');
+      return;
+    }
+
+    loginMutation.mutate({
+      userId: selectedAccount.id,
+      passcode: loginPasscode,
+    });
   };
 
   const handleBiometric = () => {
@@ -159,29 +226,84 @@ export default function UnlockPage() {
       return;
     }
 
-    biometricMutation.mutate();
+    if (!selectedAccount) {
+      setError('Сначала выберите профиль.');
+      return;
+    }
+
+    biometricMutation.mutate(selectedAccount.id);
+  };
+
+  const handleSelectAccount = (accountId: string) => {
+    if (isPending) {
+      return;
+    }
+
+    setSelectedAccountId(accountId);
+    setLoginPasscode('');
+    setError('');
   };
 
   return (
     <ScreenShell
-      title={isSetupMode ? 'Первый запуск' : 'Разблокировка'}
+      title={
+        accountsQuery.isLoading
+          ? 'Загружаем профили'
+          : hasAccounts
+            ? 'Выбор профиля'
+            : 'Первый запуск'
+      }
       subtitle={
-        isSetupMode
-          ? 'Создайте 6-значный passcode. Он сохранится на backend.'
-          : 'Введите passcode или используйте Face ID / Touch ID.'
+        hasAccounts
+          ? 'Выберите профиль и введите 6-значный PIN.'
+          : 'Профили не найдены. Создайте первый профиль.'
       }
       showNav={false}
     >
       <div className="rounded-3xl border border-white/90 bg-card p-5 shadow-card">
-        {isSetupMode ? (
+        {accountsQuery.isLoading ? (
+          <div className="rounded-2xl bg-muted px-4 py-4 text-sm text-subtext">
+            Получаем список аккаунтов...
+          </div>
+        ) : accountsQuery.isError ? (
+          <div className="space-y-3">
+            <p className="rounded-2xl border border-danger/25 bg-danger/10 px-3 py-3 text-sm text-danger">
+              {getApiErrorMessage(
+                accountsQuery.error,
+                'Не удалось загрузить список профилей.',
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => accountsQuery.refetch()}
+              className="w-full rounded-2xl bg-accent px-4 py-3 font-medium text-white transition-all duration-200 ease-ios hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isPending}
+            >
+              Повторить
+            </button>
+          </div>
+        ) : !hasAccounts ? (
           <form onSubmit={handleSetupSubmit} className="space-y-4">
             <label className="block text-sm text-subtext">
-              Passcode
+              Имя профиля
+              <input
+                value={setupDisplayName}
+                onChange={(event) => setSetupDisplayName(event.target.value)}
+                placeholder="Например, Артём"
+                type="text"
+                autoComplete="name"
+                className="mt-1"
+              />
+            </label>
+            <label className="block text-sm text-subtext">
+              PIN-код
               <input
                 inputMode="numeric"
                 maxLength={6}
-                value={draftPasscode}
-                onChange={(event) => setDraftPasscode(event.target.value.replace(/\D/g, ''))}
+                value={setupPasscode}
+                onChange={(event) =>
+                  setSetupPasscode(event.target.value.replace(/\D/g, ''))
+                }
                 placeholder="000000"
                 type="password"
                 autoComplete="new-password"
@@ -189,12 +311,14 @@ export default function UnlockPage() {
               />
             </label>
             <label className="block text-sm text-subtext">
-              Повторите passcode
+              Повторите PIN-код
               <input
                 inputMode="numeric"
                 maxLength={6}
-                value={confirmPasscode}
-                onChange={(event) => setConfirmPasscode(event.target.value.replace(/\D/g, ''))}
+                value={confirmSetupPasscode}
+                onChange={(event) =>
+                  setConfirmSetupPasscode(event.target.value.replace(/\D/g, ''))
+                }
                 placeholder="000000"
                 type="password"
                 autoComplete="new-password"
@@ -215,18 +339,56 @@ export default function UnlockPage() {
               type="submit"
               className="w-full rounded-2xl bg-accent px-4 py-3 font-medium text-white transition-all duration-200 ease-ios hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {bootstrapMutation.isPending ? 'Создаём профиль...' : 'Сохранить и открыть'}
+              {bootstrapMutation.isPending
+                ? 'Создаём профиль...'
+                : 'Сохранить и открыть'}
             </button>
           </form>
         ) : (
           <form onSubmit={handleUnlockSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-subtext">Аккаунт</p>
+              <div className="grid gap-2">
+                {accounts.map((account, index) => {
+                  const isSelected = selectedAccount?.id === account.id;
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleSelectAccount(account.id)}
+                      className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ease-ios ${
+                        isSelected
+                          ? 'border-accent bg-accent/10 text-text'
+                          : 'border-white/80 bg-white text-subtext hover:bg-muted'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium text-text">
+                        {getAccountLabel(account, index)}
+                      </span>
+                      <span className="mt-1 block text-xs">
+                        {isSelected ? 'Выбран профиль' : 'Нажмите, чтобы выбрать'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="block text-sm text-subtext">
-              Passcode
+              PIN-код
               <input
                 inputMode="numeric"
                 maxLength={6}
                 value={loginPasscode}
-                onChange={(event) => setLoginPasscode(event.target.value.replace(/\D/g, ''))}
+                onChange={(event) => {
+                  const nextPasscode = event.target.value.replace(/\D/g, '');
+                  setError('');
+                  setLoginPasscode(nextPasscode);
+
+                  if (nextPasscode.length === 6) {
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 placeholder="Введите 6 цифр"
                 type="password"
                 autoComplete="current-password"
@@ -238,7 +400,7 @@ export default function UnlockPage() {
               type="submit"
               className="w-full rounded-2xl bg-accent px-4 py-3 font-medium text-white transition-all duration-200 ease-ios hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loginMutation.isPending ? 'Проверяем...' : 'Разблокировать'}
+              {loginMutation.isPending ? 'Проверяем...' : 'Войти'}
             </button>
             <button
               type="button"
@@ -246,7 +408,9 @@ export default function UnlockPage() {
               onClick={handleBiometric}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text transition-all duration-200 ease-ios hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {biometricMutation.isPending ? 'Проверяем Face ID / Touch ID...' : 'Face ID / Touch ID'}
+              {biometricMutation.isPending
+                ? 'Проверяем Face ID / Touch ID...'
+                : 'Face ID / Touch ID'}
             </button>
             <label className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-3 text-sm text-text">
               <input

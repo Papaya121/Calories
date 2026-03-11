@@ -12,6 +12,14 @@ import { AuthWebauthnCredentialEntity } from './auth-webauthn-credential.entity'
 import { SessionEntity } from './session.entity';
 import { MealEntryEntity } from './meal-entry.entity';
 
+export type BiologicalSex = 'male' | 'female';
+export type ActivityLevel =
+  | 'sedentary'
+  | 'light'
+  | 'moderate'
+  | 'active'
+  | 'very_active';
+
 @Entity({ name: 'users' })
 export class UserEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -27,6 +35,31 @@ export class UserEntity {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
+
+  @Column({
+    name: 'biological_sex',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+  })
+  biologicalSex!: BiologicalSex | null;
+
+  @Column({ name: 'weight_kg', type: 'real', nullable: true })
+  weightKg!: number | null;
+
+  @Column({ name: 'height_cm', type: 'int', nullable: true })
+  heightCm!: number | null;
+
+  @Column({ name: 'age_years', type: 'int', nullable: true })
+  ageYears!: number | null;
+
+  @Column({
+    name: 'activity_level',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  activityLevel!: ActivityLevel | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

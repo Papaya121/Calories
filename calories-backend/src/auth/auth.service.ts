@@ -15,8 +15,13 @@ import {
   SessionEntity,
   UserEntity,
 } from '../database/entities';
+import type {
+  ActivityLevel,
+  BiologicalSex,
+} from '../database/entities/user.entity';
 import { BootstrapDto } from './dto/bootstrap.dto';
 import { PasscodeLoginDto } from './dto/passcode-login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { WebauthnVerifyDto } from './dto/webauthn-verify.dto';
 
 type TokenPayload = {
@@ -36,6 +41,36 @@ type AuthSessionResult = {
   };
 };
 
+type AuthAccountResult = {
+  id: string;
+  displayName: string | null;
+  isActive: boolean;
+};
+
+type CalorieTargets = {
+  lose: number;
+  maintain: number;
+  gain: number;
+};
+
+type UserProfileResult = {
+  biologicalSex: BiologicalSex | null;
+  weightKg: number | null;
+  heightCm: number | null;
+  ageYears: number | null;
+  activityLevel: ActivityLevel | null;
+  isComplete: boolean;
+  kcalTargets: CalorieTargets | null;
+};
+
+const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  very_active: 1.9,
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -50,21 +85,71 @@ export class AuthService {
   ) {}
 
   async bootstrap(dto: BootstrapDto): Promise<AuthSessionResult> {
-    const user = await this.findOrCreatePrimaryUser(dto.displayName);
+    const user = await this.createUser(dto.displayName);
     await this.upsertPasscode(user.id, dto.passcode);
     return this.createUserSession(user, dto.deviceName);
   }
 
-  async passcodeLogin(dto: PasscodeLoginDto): Promise<AuthSessionResult> {
-    const user = await this.usersRepository.findOne({
+  async listAccounts(): Promise<AuthAccountResult[]> {
+    const users = await this.usersRepository.find({
       where: { isActive: true },
+      relations: { passcode: true },
       order: { createdAt: 'ASC' },
     });
 
+    return users
+      .filter((user) => Boolean(user.passcode))
+      .map((user) => ({
+        id: user.id,
+        displayName: user.displayName,
+        isActive: user.isActive,
+      }));
+  }
+
+  async getUserProfile(userId: string): Promise<UserProfileResult> {
+    const user = await this.usersRepository.findOneBy({
+      id: userId,
+      isActive: true,
+    });
+
     if (!user) {
-      throw new NotFoundException(
-        'User is not initialized yet. Use /auth/bootstrap first',
-      );
+      throw new NotFoundException('User not found');
+    }
+
+    return this.buildUserProfile(user);
+  }
+
+  async updateUserProfile(
+    userId: string,
+    dto: UpdateProfileDto,
+  ): Promise<UserProfileResult> {
+    const user = await this.usersRepository.findOneBy({
+      id: userId,
+      isActive: true,
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.biologicalSex = dto.biologicalSex;
+    user.weightKg = dto.weightKg;
+    user.heightCm = dto.heightCm;
+    user.ageYears = dto.ageYears;
+    user.activityLevel = dto.activityLevel;
+    const saved = await this.usersRepository.save(user);
+
+    return this.buildUserProfile(saved);
+  }
+
+  async passcodeLogin(dto: PasscodeLoginDto): Promise<AuthSessionResult> {
+    const user = await this.usersRepository.findOneBy({
+      id: dto.userId,
+      isActive: true,
+    });
+
+    if (!user) {
+      throw new NotFoundException('Selected account not found');
     }
 
     const passcode = await this.passcodesRepository.findOneBy({
@@ -147,10 +232,15 @@ export class AuthService {
   async webauthnVerify(
     dto: WebauthnVerifyDto,
   ): Promise<AuthSessionResult & { isStub: boolean }> {
-    const user = await this.usersRepository.findOne({
-      where: { isActive: true },
-      order: { createdAt: 'ASC' },
-    });
+    const user = dto.userId
+      ? await this.usersRepository.findOneBy({
+          id: dto.userId,
+          isActive: true,
+        })
+      : await this.usersRepository.findOne({
+          where: { isActive: true },
+          order: { createdAt: 'ASC' },
+        });
 
     if (!user) {
       throw new BadRequestException('No active user found for WebAuthn login');
@@ -185,31 +275,90 @@ export class AuthService {
     };
   }
 
-  private async findOrCreatePrimaryUser(
-    displayName?: string,
-  ): Promise<UserEntity> {
-    let user = await this.usersRepository.findOne({
-      where: {},
-      order: { createdAt: 'ASC' },
+  private async createUser(displayName?: string): Promise<UserEntity> {
+    const user = this.usersRepository.create({
+      displayName: displayName?.trim() || 'User',
+      isActive: true,
     });
-
-    if (!user) {
-      user = this.usersRepository.create({
-        displayName: displayName?.trim() || 'User',
-        isActive: true,
-      });
-      return this.usersRepository.save(user);
-    }
-
-    if (!user.isActive) {
-      user.isActive = true;
-    }
-
-    if (displayName?.trim()) {
-      user.displayName = displayName.trim();
-    }
-
     return this.usersRepository.save(user);
+  }
+
+  private buildUserProfile(user: UserEntity): UserProfileResult {
+    const weightKg =
+      typeof user.weightKg === 'number'
+        ? Number(user.weightKg.toFixed(1))
+        : null;
+    const heightCm =
+      typeof user.heightCm === 'number' ? Math.round(user.heightCm) : null;
+    const ageYears =
+      typeof user.ageYears === 'number' ? Math.round(user.ageYears) : null;
+    const activityLevel = user.activityLevel;
+    const biologicalSex = user.biologicalSex;
+    const isComplete = Boolean(
+      biologicalSex && weightKg && heightCm && ageYears && activityLevel,
+    );
+
+    if (
+      !isComplete ||
+      !biologicalSex ||
+      !weightKg ||
+      !heightCm ||
+      !ageYears ||
+      !activityLevel
+    ) {
+      return {
+        biologicalSex,
+        weightKg,
+        heightCm,
+        ageYears,
+        activityLevel,
+        isComplete: false,
+        kcalTargets: null,
+      };
+    }
+
+    return {
+      biologicalSex,
+      weightKg,
+      heightCm,
+      ageYears,
+      activityLevel,
+      isComplete: true,
+      kcalTargets: this.calculateCalorieTargets(
+        biologicalSex,
+        weightKg,
+        heightCm,
+        ageYears,
+        activityLevel,
+      ),
+    };
+  }
+
+  private calculateCalorieTargets(
+    biologicalSex: BiologicalSex,
+    weightKg: number,
+    heightCm: number,
+    ageYears: number,
+    activityLevel: ActivityLevel,
+  ): CalorieTargets {
+    const sexAdjustment = biologicalSex === 'male' ? 5 : -161;
+    const bmr = 10 * weightKg + 6.25 * heightCm - 5 * ageYears + sexAdjustment;
+    const maintenance = this.roundToNearestTen(
+      bmr * ACTIVITY_MULTIPLIERS[activityLevel],
+    );
+    const minDeficit = biologicalSex === 'male' ? 1400 : 1200;
+    const lose = Math.max(minDeficit, this.roundToNearestTen(maintenance * 0.85));
+    const gain = this.roundToNearestTen(maintenance * 1.15);
+
+    return {
+      lose,
+      maintain: maintenance,
+      gain,
+    };
+  }
+
+  private roundToNearestTen(value: number): number {
+    return Math.round(value / 10) * 10;
   }
 
   private async upsertPasscode(

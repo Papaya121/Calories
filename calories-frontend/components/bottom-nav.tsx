@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/today', label: 'Сегодня', icon: '◉' },
   { href: '/add', label: 'Добавить', icon: '＋' },
-  { href: '/calendar', label: 'Календарь', icon: '◌' }
+  { href: '/calendar', label: 'Календарь', icon: '◌' },
+  { href: '/settings', label: 'Настройки', icon: '⚙' }
 ];
 
 export function BottomNav() {
@@ -21,7 +22,7 @@ export function BottomNav() {
             <Link
               key={link.href}
               href={link.href}
-              className={`flex min-w-[110px] flex-col items-center rounded-2xl px-4 py-2 text-xs transition-all duration-200 ease-ios ${
+              className={`flex min-w-[80px] flex-1 flex-col items-center rounded-2xl px-2 py-2 text-xs transition-all duration-200 ease-ios ${
                 isActive
                   ? 'bg-accent text-white shadow-soft'
                   : 'text-subtext hover:bg-slate-100/80 hover:text-text'

@@ -1,9 +1,13 @@
 import {
   AnalyzeMealResponse,
+  ActivityLevel,
+  AuthAccount,
   AuthSession,
+  BiologicalSex,
   CalendarRangeResponse,
   DayDetailsResponse,
   MealEntry,
+  UserProfile,
 } from "@/lib/types";
 
 const DEFAULT_API_BASE_URL = "http://155.212.191.239:3232/api/v1";
@@ -162,6 +166,43 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
+export async function authListAccounts(): Promise<AuthAccount[]> {
+  const response = await request<{ accounts: AuthAccount[] }>("/auth/accounts", {
+    method: "GET",
+  });
+  return response.accounts;
+}
+
+export async function getMyProfile(token: string): Promise<UserProfile> {
+  const response = await request<{ profile: UserProfile }>("/auth/profile", {
+    method: "GET",
+    token,
+  });
+  return response.profile;
+}
+
+export async function updateMyProfile(
+  token: string,
+  payload: {
+    biologicalSex: BiologicalSex;
+    weightKg: number;
+    heightCm: number;
+    ageYears: number;
+    activityLevel: ActivityLevel;
+  },
+): Promise<UserProfile> {
+  const response = await request<{ profile: UserProfile }>("/auth/profile", {
+    method: "PATCH",
+    token,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: toJsonBody(payload),
+  });
+
+  return response.profile;
+}
+
 export async function authBootstrap(input: {
   passcode: string;
   displayName?: string;
@@ -181,6 +222,7 @@ export async function authBootstrap(input: {
 }
 
 export async function authPasscodeLogin(input: {
+  userId: string;
   passcode: string;
   deviceName?: string;
 }): Promise<AuthSession> {
@@ -190,6 +232,7 @@ export async function authPasscodeLogin(input: {
       "Content-Type": "application/json",
     },
     body: toJsonBody({
+      userId: input.userId,
       passcode: input.passcode,
       deviceName: input.deviceName,
     }),
@@ -198,6 +241,7 @@ export async function authPasscodeLogin(input: {
 
 export async function authWebauthnVerify(input: {
   assertionId: string;
+  userId?: string;
   deviceName?: string;
 }): Promise<AuthSession> {
   const result = await request<AuthSession & { isStub: boolean }>(
@@ -209,6 +253,7 @@ export async function authWebauthnVerify(input: {
       },
       body: toJsonBody({
         assertionId: input.assertionId,
+        userId: input.userId,
         deviceName: input.deviceName,
       }),
     },

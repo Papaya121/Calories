@@ -45,6 +45,33 @@ export type SessionUser = {
   isActive: boolean;
 };
 
+export type AuthAccount = SessionUser;
+
+export type BiologicalSex = 'male' | 'female';
+
+export type ActivityLevel =
+  | 'sedentary'
+  | 'light'
+  | 'moderate'
+  | 'active'
+  | 'very_active';
+
+export type CalorieTargets = {
+  lose: number;
+  maintain: number;
+  gain: number;
+};
+
+export type UserProfile = {
+  biologicalSex: BiologicalSex | null;
+  weightKg: number | null;
+  heightCm: number | null;
+  ageYears: number | null;
+  activityLevel: ActivityLevel | null;
+  isComplete: boolean;
+  kcalTargets: CalorieTargets | null;
+};
+
 export type AuthSession = {
   accessToken: string;
   accessExpiresInSec: number;

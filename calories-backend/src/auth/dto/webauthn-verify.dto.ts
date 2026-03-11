@@ -1,6 +1,11 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class WebauthnVerifyDto {
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  userId?: string;
+
   @IsString()
   @MaxLength(300)
   assertionId!: string;
