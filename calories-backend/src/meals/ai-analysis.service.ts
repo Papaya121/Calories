@@ -110,30 +110,98 @@ export class AiAnalysisService {
     const dishDescription =
       this.pickString(aiPayload, ['dishDescription', 'dish_description']) ??
       this.descriptionFromComment(input.comment);
-    const caloriesKcal =
+    const rawCaloriesKcal =
       this.pickNumber(aiPayload, ['caloriesKcal', 'calories_kcal']) ?? 600;
-    const proteinG = this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28;
-    const fatG = this.pickNumber(aiPayload, ['fatG', 'fat_g']) ?? 22;
-    const carbsG = this.pickNumber(aiPayload, ['carbsG', 'carbs_g']) ?? 68;
+    const rawProteinG = this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28;
+    const rawFatG = this.pickNumber(aiPayload, ['fatG', 'fat_g']) ?? 22;
+    const rawCarbsG = this.pickNumber(aiPayload, ['carbsG', 'carbs_g']) ?? 68;
+    const parsedWeightG = this.pickNumber(aiPayload, [
+      'estimatedWeightG',
+      'estimated_weight_g',
+      'portionWeightG',
+      'portion_weight_g',
+      'weightG',
+      'weight_g',
+      'grams',
+    ]);
+    const aiWeightG =
+      typeof parsedWeightG === 'number'
+        ? this.normalizeWeightG(parsedWeightG)
+        : undefined;
+    const userProvidedWeightG = this.extractWeightFromText(input.comment);
+    const textualWeightG =
+      userProvidedWeightG ??
+      this.extractWeightFromText(`${dishName} ${dishDescription}`);
     const estimatedWeightG =
+      textualWeightG ??
+      aiWeightG ??
+      this.estimateWeightFromCalories(rawCaloriesKcal);
+
+    const nutritionPer100gPayload = this.extractNutritionPer100gPayload(aiPayload);
+    const caloriesPer100gKcal = this.normalizeCaloriesPer100gKcal(
       this.pickNumber(aiPayload, [
-        'estimatedWeightG',
-        'estimated_weight_g',
-        'portionWeightG',
-        'portion_weight_g',
-        'weightG',
-        'weight_g',
-        'grams',
-      ]) ?? this.estimateWeightFromCalories(caloriesKcal);
+        'caloriesPer100gKcal',
+        'calories_per_100g_kcal',
+        'kcalPer100g',
+        'kcal_per_100g',
+      ]) ??
+        (nutritionPer100gPayload
+          ? this.pickNumber(nutritionPer100gPayload, [
+              'caloriesKcal',
+              'calories_kcal',
+              'kcal',
+            ])
+          : undefined) ??
+        this.derivePer100(rawCaloriesKcal, aiWeightG ?? estimatedWeightG),
+    );
+    const proteinPer100g = this.normalizeMacroPer100g(
+      this.pickNumber(aiPayload, ['proteinPer100g', 'protein_per_100g']) ??
+        (nutritionPer100gPayload
+          ? this.pickNumber(nutritionPer100gPayload, ['proteinG', 'protein_g'])
+          : undefined) ??
+        this.derivePer100(rawProteinG, aiWeightG ?? estimatedWeightG),
+    );
+    const fatPer100g = this.normalizeMacroPer100g(
+      this.pickNumber(aiPayload, ['fatPer100g', 'fat_per_100g']) ??
+        (nutritionPer100gPayload
+          ? this.pickNumber(nutritionPer100gPayload, ['fatG', 'fat_g'])
+          : undefined) ??
+        this.derivePer100(rawFatG, aiWeightG ?? estimatedWeightG),
+    );
+    const carbsPer100g = this.normalizeMacroPer100g(
+      this.pickNumber(aiPayload, ['carbsPer100g', 'carbs_per_100g']) ??
+        (nutritionPer100gPayload
+          ? this.pickNumber(nutritionPer100gPayload, ['carbsG', 'carbs_g'])
+          : undefined) ??
+        this.derivePer100(rawCarbsG, aiWeightG ?? estimatedWeightG),
+    );
+
+    const caloriesKcal = Math.round(
+      this.scaleFromPer100(caloriesPer100gKcal, estimatedWeightG),
+    );
+    const proteinG = this.roundToOne(
+      this.scaleFromPer100(proteinPer100g, estimatedWeightG),
+    );
+    const fatG = this.roundToOne(this.scaleFromPer100(fatPer100g, estimatedWeightG));
+    const carbsG = this.roundToOne(
+      this.scaleFromPer100(carbsPer100g, estimatedWeightG),
+    );
+    const macroBasedCaloriesKcal = this.roundToOne(
+      proteinG * 4 + fatG * 9 + carbsG * 4,
+    );
+    const normalizedCaloriesKcal = this.reconcileCaloriesKcal(
+      caloriesKcal,
+      macroBasedCaloriesKcal,
+    );
 
     return {
       dishName,
       dishDescription,
-      caloriesKcal,
+      caloriesKcal: normalizedCaloriesKcal,
       proteinG,
       fatG,
       carbsG,
-      estimatedWeightG: this.normalizeWeightG(estimatedWeightG),
+      estimatedWeightG,
       confidence: this.clamp01(
         this.pickNumber(aiPayload, ['confidence']) ?? 0.68,
       ),
@@ -151,6 +219,104 @@ export class AiAnalysisService {
         ]) ?? true,
       isStub: false,
     };
+  }
+
+  private extractNutritionPer100gPayload(
+    payload: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
+    return (
+      this.toRecord(payload.nutritionPer100g) ??
+      this.toRecord(payload.nutrition_per_100g) ??
+      this.toRecord(payload.per100g)
+    );
+  }
+
+  private derivePer100(
+    totalValue: number,
+    weightG: number,
+  ): number | undefined {
+    if (weightG <= 0) {
+      return undefined;
+    }
+
+    return (totalValue * 100) / weightG;
+  }
+
+  private scaleFromPer100(per100Value: number, weightG: number): number {
+    if (weightG <= 0) {
+      return 0;
+    }
+
+    return (per100Value * weightG) / 100;
+  }
+
+  private normalizeCaloriesPer100gKcal(value: number | undefined): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 170;
+    }
+
+    return Math.round(this.clampRange(value, 20, 900));
+  }
+
+  private normalizeMacroPer100g(value: number | undefined): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 0;
+    }
+
+    return this.roundToOne(this.clampRange(value, 0, 100));
+  }
+
+  private reconcileCaloriesKcal(
+    caloriesKcal: number,
+    macroBasedCaloriesKcal: number,
+  ): number {
+    if (!Number.isFinite(macroBasedCaloriesKcal) || macroBasedCaloriesKcal <= 0) {
+      return caloriesKcal;
+    }
+
+    const relativeDelta =
+      Math.abs(caloriesKcal - macroBasedCaloriesKcal) / macroBasedCaloriesKcal;
+    if (relativeDelta <= 0.35) {
+      return caloriesKcal;
+    }
+
+    return Math.round((caloriesKcal + macroBasedCaloriesKcal) / 2);
+  }
+
+  private extractWeightFromText(text?: string): number | undefined {
+    if (!text?.trim()) {
+      return undefined;
+    }
+
+    const matches = text.matchAll(
+      /(\d+(?:[.,]\d+)?)\s*(кг|kg|килограмм(?:а|ов)?|г|гр|грамм(?:а|ов)?|g)\b/giu,
+    );
+    let parsedWeightG: number | undefined;
+    for (const match of matches) {
+      const rawValue = match[1]?.replace(',', '.');
+      const unit = match[2]?.toLowerCase();
+      if (!rawValue || !unit) {
+        continue;
+      }
+
+      const numericValue = Number(rawValue);
+      if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        continue;
+      }
+
+      if (unit === 'kg' || unit.startsWith('кг') || unit.startsWith('килограмм')) {
+        parsedWeightG = numericValue * 1000;
+        continue;
+      }
+
+      parsedWeightG = numericValue;
+    }
+
+    if (typeof parsedWeightG !== 'number' || !Number.isFinite(parsedWeightG)) {
+      return undefined;
+    }
+
+    return this.normalizeWeightG(parsedWeightG);
   }
 
   private buildStubResult(input: AnalyzeInput, aiModel: string): AnalyzeOutput {
@@ -239,8 +405,9 @@ export class AiAnalysisService {
     return [
       'Оцени блюдо по фото и ответь строго JSON-объектом без пояснений.',
       'Поля JSON:',
-      'dish_name, dish_description, calories_kcal, protein_g, fat_g, carbs_g, estimated_weight_g, confidence, needs_user_confirmation.',
-      'estimated_weight_g должен быть весом порции в граммах (примерно).',
+      'dish_name, dish_description, estimated_weight_g, calories_per_100g_kcal, protein_per_100g, fat_per_100g, carbs_per_100g, calories_kcal, protein_g, fat_g, carbs_g, confidence, needs_user_confirmation.',
+      'Сначала оцени показатели на 100 г (calories_per_100g_kcal, protein_per_100g, fat_per_100g, carbs_per_100g), затем умножь их на estimated_weight_g / 100 и заполни итоговые calories_kcal/protein_g/fat_g/carbs_g.',
+      'Если в комментарии есть вес порции (например "300 г"), используй его как estimated_weight_g.',
       'confidence должен быть числом от 0 до 1.',
       `Комментарий пользователя: ${normalizedComment ? normalizedComment : 'не указан'}.`,
       imageLine,
@@ -497,17 +664,33 @@ export class AiAnalysisService {
   }
 
   private containsAnalysisKeys(payload: Record<string, unknown>): boolean {
+    if (
+      'nutrition_per_100g' in payload ||
+      'nutritionPer100g' in payload ||
+      'per100g' in payload
+    ) {
+      return true;
+    }
+
     return [
       'dish_name',
       'dishName',
       'calories_kcal',
       'caloriesKcal',
+      'calories_per_100g_kcal',
+      'caloriesPer100gKcal',
       'protein_g',
       'proteinG',
+      'protein_per_100g',
+      'proteinPer100g',
       'fat_g',
       'fatG',
+      'fat_per_100g',
+      'fatPer100g',
       'carbs_g',
       'carbsG',
+      'carbs_per_100g',
+      'carbsPer100g',
       'estimated_weight_g',
       'estimatedWeightG',
       'confidence',
@@ -633,6 +816,10 @@ export class AiAnalysisService {
 
   private normalizeWeightG(weightG: number): number {
     return Math.round(this.clampRange(weightG, 30, 2_000));
+  }
+
+  private roundToOne(value: number): number {
+    return Math.round(value * 10) / 10;
   }
 
   private estimateWeightFromCalories(caloriesKcal: number): number {
