@@ -25,9 +25,9 @@ async function bootstrap() {
     }),
   );
 
-  const corsOrigin = process.env.CORS_ORIGIN?.split(',').map((origin) =>
-    origin.trim(),
-  );
+  const corsOrigin = process.env.CORS_ORIGIN?.split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
 
   app.enableCors({
     origin: corsOrigin && corsOrigin.length > 0 ? corsOrigin : true,

@@ -6,7 +6,7 @@ import {
   MealEntry,
 } from "@/lib/types";
 
-const DEFAULT_API_BASE_URL = "http://192.168.0.240:3232/api/v1";
+const DEFAULT_API_BASE_URL = "http://155.212.191.239:3232/api/v1";
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL
 ).replace(/\/+$/, "");
