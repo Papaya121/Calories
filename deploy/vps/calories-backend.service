@@ -1,0 +1,17 @@
+[Unit]
+Description=Calories Backend (NestJS)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Calories/calories-backend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --enable-source-maps /root/Calories/calories-backend/dist/main
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
