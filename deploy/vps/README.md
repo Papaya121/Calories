@@ -24,11 +24,18 @@ bash deploy/vps/setup-domain.sh your-domain.com your-email@example.com
 ```
 
 The script:
-- installs `certbot`
 - creates nginx config from template
-- gets Let's Encrypt cert
+- uses local certs from `certs/certificate.crt` + `certs/certificate.key` when they exist
+- otherwise installs `certbot` and gets Let's Encrypt cert
 - updates backend `.env` (`CORS_ORIGIN`, `AI_IMAGE_PUBLIC_BASE_URL`) without deleting other values
 - writes frontend `.env.production` (`NEXT_PUBLIC_API_BASE_URL=https://<domain>/api/v1`)
+
+Force cert mode via env:
+
+```bash
+SETUP_DOMAIN_CERT_MODE=local bash deploy/vps/setup-domain.sh your-domain.com
+SETUP_DOMAIN_CERT_MODE=letsencrypt bash deploy/vps/setup-domain.sh your-domain.com your-email@example.com
+```
 
 ## 3) GitHub Actions secrets
 
