@@ -15,6 +15,7 @@ import {
   getApiErrorMessage,
 } from '@/lib/api';
 import { AnalyzeResult } from '@/lib/types';
+import { toDateKey } from '@/lib/date';
 import { useSessionStore } from '@/store/use-session-store';
 
 const EMPTY_RESULT: AnalyzeResult = {
@@ -42,6 +43,8 @@ export default function AddMealPage() {
   const queryClient = useQueryClient();
   const accessToken = useSessionStore((state) => state.accessToken);
   const lock = useSessionStore((state) => state.lock);
+
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -114,8 +117,33 @@ export default function AddMealPage() {
       });
     },
     onSuccess: (meal) => {
-      queryClient.invalidateQueries({ queryKey: ['day'] });
+      queryClient.invalidateQueries({ queryKey: ['day', todayKey] });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+
+      queryClient.setQueryData(['day', todayKey], (old) => {
+        if (!old || typeof old !== 'object') {
+          return old;
+        }
+
+        const day = old as {
+          date: string;
+          totals: { caloriesKcal: number; proteinG: number; fatG: number; carbsG: number; mealsCount: number };
+          meals: Array<any>;
+        };
+
+        return {
+          ...day,
+          totals: {
+            caloriesKcal: day.totals.caloriesKcal + meal.caloriesKcal,
+            proteinG: day.totals.proteinG + meal.proteinG,
+            fatG: day.totals.fatG + meal.fatG,
+            carbsG: day.totals.carbsG + meal.carbsG,
+            mealsCount: day.totals.mealsCount + 1,
+          },
+          meals: [meal, ...(day.meals || [])],
+        };
+      });
+
       router.push(`/meal/${meal.id}`);
     },
     onError: (err) => {

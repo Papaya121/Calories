@@ -15,7 +15,7 @@ import {
   getMeal,
   updateMeal,
 } from '@/lib/api';
-import { formatDayTitle, formatTime } from '@/lib/date';
+import { formatDayTitle, formatTime, toDateKey } from '@/lib/date';
 import { AnalyzeResult } from '@/lib/types';
 import { useSessionStore } from '@/store/use-session-store';
 
@@ -50,6 +50,11 @@ export default function MealDetailPage() {
     queryFn: () => getMeal(accessToken as string, mealId),
     enabled: Boolean(accessToken && mealId),
   });
+
+  const mealDayKey = useMemo(() => {
+    if (!mealQuery.data) return null;
+    return toDateKey(mealQuery.data.eatenAt);
+  }, [mealQuery.data]);
 
   useEffect(() => {
     if (mealQuery.error instanceof ApiError && mealQuery.error.status === 401) {
@@ -92,7 +97,9 @@ export default function MealDetailPage() {
     },
     onSuccess: (meal) => {
       queryClient.setQueryData(['meal', meal.id], meal);
-      queryClient.invalidateQueries({ queryKey: ['day'] });
+      if (mealDayKey) {
+        queryClient.invalidateQueries({ queryKey: ['day', mealDayKey] });
+      }
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       setError('');
       setSavedMessage('Сохранено');
@@ -115,7 +122,9 @@ export default function MealDetailPage() {
       await deleteMeal(accessToken, mealId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['day'] });
+      if (mealDayKey) {
+        queryClient.invalidateQueries({ queryKey: ['day', mealDayKey] });
+      }
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.removeQueries({ queryKey: ['meal', mealId] });
       router.replace('/today');
