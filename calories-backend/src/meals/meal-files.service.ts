@@ -29,9 +29,20 @@ export class MealFilesService implements OnModuleInit {
 
   toStorageKey(photoPath: string): string {
     const trimmed = photoPath.trim();
-    const withoutPrefix = trimmed.startsWith('/uploads/')
-      ? trimmed.slice('/uploads/'.length)
-      : trimmed;
+
+    // Handle full URLs by extracting the path after /uploads/
+    let withoutPrefix: string;
+    if (trimmed.startsWith('/uploads/')) {
+      withoutPrefix = trimmed.slice('/uploads/'.length);
+    } else if (trimmed.includes('/uploads/')) {
+      // For full URLs like https://example.com/uploads/meals/file
+      const url = new URL(trimmed);
+      withoutPrefix = url.pathname.startsWith('/uploads/')
+        ? url.pathname.slice('/uploads/'.length)
+        : url.pathname;
+    } else {
+      withoutPrefix = trimmed;
+    }
 
     const normalized = path.posix.normalize(withoutPrefix);
 

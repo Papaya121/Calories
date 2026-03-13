@@ -20,6 +20,9 @@ cd "$BACKEND_DIR"
 npm ci --no-audit --no-fund
 npm run build
 
+echo "[deploy] ensure uploads directory exists"
+mkdir -p "$BACKEND_DIR/uploads/meals"
+
 echo "[deploy] frontend install/build"
 cd "$FRONTEND_DIR"
 export NEXT_TELEMETRY_DISABLED=1
