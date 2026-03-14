@@ -65,6 +65,14 @@ function getTzOffsetMinutes(): string {
   return `${new Date().getTimezoneOffset()}`;
 }
 
+function getClientTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMeal(meal: MealEntry): MealEntry {
   if (meal.photoUrl.startsWith("/uploads/")) {
     return {
@@ -377,9 +385,14 @@ export async function getDayDetails(
   token: string,
   date: string,
 ): Promise<DayDetailsResponse> {
-  const query = new URLSearchParams({
+  const queryParams = new URLSearchParams({
     tzOffsetMinutes: getTzOffsetMinutes(),
-  }).toString();
+  });
+  const timeZone = getClientTimeZone();
+  if (timeZone) {
+    queryParams.set("timeZone", timeZone);
+  }
+  const query = queryParams.toString();
 
   return request<DayDetailsResponse>(`/days/${date}?${query}`, {
     method: "GET",
@@ -392,11 +405,16 @@ export async function getCalendarRange(
   from: string,
   to: string,
 ): Promise<CalendarRangeResponse> {
-  const query = new URLSearchParams({
+  const queryParams = new URLSearchParams({
     from,
     to,
     tzOffsetMinutes: getTzOffsetMinutes(),
-  }).toString();
+  });
+  const timeZone = getClientTimeZone();
+  if (timeZone) {
+    queryParams.set("timeZone", timeZone);
+  }
+  const query = queryParams.toString();
   return request<CalendarRangeResponse>(`/calendar?${query}`, {
     method: "GET",
     token,

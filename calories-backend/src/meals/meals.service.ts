@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -251,17 +255,11 @@ export class MealsService {
     userId: string,
     date: string,
     tzOffsetMinutes = 0,
+    timeZone?: string,
   ): Promise<MealResponse[]> {
-    const { start, end } = this.resolveUtcDayWindow(date, tzOffsetMinutes);
-
-    const meals = await this.mealEntriesRepository.find({
-      where: {
-        userId,
-        eatenAt: Between(start, end),
-      },
-      relations: { photos: true },
-      order: { eatenAt: 'DESC' },
-    });
+    const meals = timeZone
+      ? await this.findMealsByClientDate(userId, date, timeZone, 'DESC')
+      : await this.findMealsByDateWithOffset(userId, date, tzOffsetMinutes);
 
     return meals.map((meal) => this.toMealResponse(meal));
   }
@@ -271,7 +269,12 @@ export class MealsService {
     from: string,
     to: string,
     tzOffsetMinutes = 0,
+    timeZone?: string,
   ): Promise<MealEntryEntity[]> {
+    if (timeZone) {
+      return this.findMealsByClientDateRange(userId, from, to, timeZone);
+    }
+
     const { start: fromDate } = this.resolveUtcDayWindow(from, tzOffsetMinutes);
     const { end: toDate } = this.resolveUtcDayWindow(to, tzOffsetMinutes);
 
@@ -324,5 +327,74 @@ export class MealsService {
       Date.UTC(year, (month || 1) - 1, day || 1) + tzOffsetMinutes * 60_000;
     const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
     return { start: new Date(startMs), end: new Date(endMs) };
+  }
+
+  private async findMealsByDateWithOffset(
+    userId: string,
+    date: string,
+    tzOffsetMinutes: number,
+  ): Promise<MealEntryEntity[]> {
+    const { start, end } = this.resolveUtcDayWindow(date, tzOffsetMinutes);
+
+    return this.mealEntriesRepository.find({
+      where: {
+        userId,
+        eatenAt: Between(start, end),
+      },
+      relations: { photos: true },
+      order: { eatenAt: 'DESC' },
+    });
+  }
+
+  private async findMealsByClientDate(
+    userId: string,
+    date: string,
+    timeZone: string,
+    sortDirection: 'ASC' | 'DESC',
+  ): Promise<MealEntryEntity[]> {
+    this.assertValidTimeZone(timeZone);
+
+    return this.mealEntriesRepository
+      .createQueryBuilder('meal')
+      .leftJoinAndSelect('meal.photos', 'photo')
+      .where('meal.user_id = :userId', { userId })
+      .andWhere('(meal.eaten_at AT TIME ZONE :timeZone)::date = :date', {
+        timeZone,
+        date,
+      })
+      .orderBy('meal.eaten_at', sortDirection)
+      .getMany();
+  }
+
+  private async findMealsByClientDateRange(
+    userId: string,
+    from: string,
+    to: string,
+    timeZone: string,
+  ): Promise<MealEntryEntity[]> {
+    this.assertValidTimeZone(timeZone);
+
+    return this.mealEntriesRepository
+      .createQueryBuilder('meal')
+      .leftJoinAndSelect('meal.photos', 'photo')
+      .where('meal.user_id = :userId', { userId })
+      .andWhere(
+        '(meal.eaten_at AT TIME ZONE :timeZone)::date BETWEEN :from AND :to',
+        {
+          timeZone,
+          from,
+          to,
+        },
+      )
+      .orderBy('meal.eaten_at', 'ASC')
+      .getMany();
+  }
+
+  private assertValidTimeZone(timeZone: string): void {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone });
+    } catch {
+      throw new BadRequestException('Invalid timeZone value');
+    }
   }
 }

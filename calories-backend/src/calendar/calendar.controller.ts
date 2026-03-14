@@ -22,6 +22,7 @@ export class CalendarController {
       query.from,
       query.to,
       query.tzOffsetMinutes ?? 0,
+      query.timeZone,
     );
   }
 
@@ -35,6 +36,7 @@ export class CalendarController {
       user.userId,
       params.date,
       query.tzOffsetMinutes ?? 0,
+      query.timeZone,
     );
   }
 }

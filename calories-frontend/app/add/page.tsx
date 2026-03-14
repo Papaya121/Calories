@@ -44,8 +44,6 @@ export default function AddMealPage() {
   const accessToken = useSessionStore((state) => state.accessToken);
   const lock = useSessionStore((state) => state.lock);
 
-  const todayKey = useMemo(() => toDateKey(new Date()), []);
-
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [analyzedPhotoPath, setAnalyzedPhotoPath] = useState<string | null>(null);
@@ -117,10 +115,12 @@ export default function AddMealPage() {
       });
     },
     onSuccess: (meal) => {
-      queryClient.invalidateQueries({ queryKey: ['day', todayKey] });
+      const mealDayKey = toDateKey(meal.eatenAt);
+
+      queryClient.invalidateQueries({ queryKey: ['day', mealDayKey] });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
 
-      queryClient.setQueryData(['day', todayKey], (old) => {
+      queryClient.setQueryData(['day', mealDayKey], (old) => {
         if (!old || typeof old !== 'object') {
           return old;
         }

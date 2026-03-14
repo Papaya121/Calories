@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CalendarRangeQueryDto {
   @IsString()
@@ -16,4 +24,9 @@ export class CalendarRangeQueryDto {
   @Min(-840)
   @Max(840)
   tzOffsetMinutes?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  timeZone?: string;
 }
