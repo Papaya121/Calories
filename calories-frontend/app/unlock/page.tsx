@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -12,7 +12,7 @@ import {
   authWebauthnVerify,
   getApiErrorMessage,
 } from '@/lib/api';
-import { AuthAccount } from '@/lib/types';
+import { AuthAccount, AuthSession } from '@/lib/types';
 import { useSessionStore } from '@/store/use-session-store';
 
 const PASSCODE_REGEX = /^\d{6}$/;
@@ -46,6 +46,7 @@ function getAccountLabel(account: AuthAccount, index: number): string {
 
 export default function UnlockPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const selectedAccountId = useSessionStore((state) => state.selectedAccountId);
   const hasHydrated = useSessionStore((state) => state.hasHydrated);
   const biometricEnabled = useSessionStore((state) => state.biometricEnabled);
@@ -62,6 +63,17 @@ export default function UnlockPage() {
   const [accountsExpanded, setAccountsExpanded] = useState(false);
   const [error, setError] = useState('');
 
+  const applyAuthSession = (session: AuthSession) => {
+    queryClient.removeQueries({ queryKey: ['profile'] });
+    queryClient.removeQueries({ queryKey: ['day'] });
+    queryClient.removeQueries({ queryKey: ['calendar'] });
+    queryClient.removeQueries({ queryKey: ['meal'] });
+
+    setSelectedAccountId(session.user.id);
+    setAuthSession(session);
+    router.replace('/profile-setup');
+  };
+
   const accountsQuery = useQuery({
     queryKey: ['auth', 'accounts'],
     queryFn: authListAccounts,
@@ -75,11 +87,7 @@ export default function UnlockPage() {
         displayName: payload.displayName,
         deviceName: getDeviceName(),
       }),
-    onSuccess: (session) => {
-      setSelectedAccountId(session.user.id);
-      setAuthSession(session);
-      router.replace('/profile-setup');
-    },
+    onSuccess: applyAuthSession,
     onError: (err) => {
       setError(
         getApiErrorMessage(
@@ -97,11 +105,7 @@ export default function UnlockPage() {
         passcode: payload.passcode,
         deviceName: getDeviceName(),
       }),
-    onSuccess: (session) => {
-      setSelectedAccountId(session.user.id);
-      setAuthSession(session);
-      router.replace('/profile-setup');
-    },
+    onSuccess: applyAuthSession,
     onError: (err) => {
       setError(
         getApiErrorMessage(err, 'Не удалось выполнить вход. Проверьте PIN-код.'),
@@ -116,11 +120,7 @@ export default function UnlockPage() {
         userId,
         deviceName: getDeviceName(),
       }),
-    onSuccess: (session) => {
-      setSelectedAccountId(session.user.id);
-      setAuthSession(session);
-      router.replace('/profile-setup');
-    },
+    onSuccess: applyAuthSession,
     onError: (err) => {
       setError(
         getApiErrorMessage(

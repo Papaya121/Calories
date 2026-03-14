@@ -24,10 +24,14 @@ export default function ProfileSetupPage() {
   });
 
   useEffect(() => {
-    if (profileQuery.error instanceof ApiError && profileQuery.error.status === 401) {
+    if (
+      profileQuery.error instanceof ApiError &&
+      profileQuery.error.status === 401 &&
+      profileQuery.fetchStatus === 'idle'
+    ) {
       lock();
     }
-  }, [lock, profileQuery.error]);
+  }, [lock, profileQuery.error, profileQuery.fetchStatus]);
 
   useEffect(() => {
     if (profileQuery.data?.isComplete) {

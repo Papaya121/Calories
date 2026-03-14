@@ -33,7 +33,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (profileQuery.error instanceof ApiError && profileQuery.error.status === 401) {
+    if (
+      profileQuery.error instanceof ApiError &&
+      profileQuery.error.status === 401 &&
+      profileQuery.fetchStatus === 'idle'
+    ) {
       lock();
       return;
     }
@@ -49,6 +53,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     pathname,
     profileQuery.data,
     profileQuery.error,
+    profileQuery.fetchStatus,
     router,
     userId,
   ]);
