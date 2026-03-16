@@ -12,6 +12,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isUnlocked = useSessionStore((state) => state.isUnlocked);
+  const isRestoringSession = useSessionStore((state) => state.isRestoringSession);
   const hasHydrated = useSessionStore((state) => state.hasHydrated);
   const accessToken = useSessionStore((state) => state.accessToken);
   const userId = useSessionStore((state) => state.user?.id ?? null);
@@ -24,7 +25,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!hasHydrated || isRestoringSession) {
       return;
     }
 
@@ -48,6 +49,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [
     accessToken,
     hasHydrated,
+    isRestoringSession,
     isUnlocked,
     lock,
     pathname,
@@ -58,7 +60,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     userId,
   ]);
 
-  if (!hasHydrated || !isUnlocked || !accessToken || profileQuery.isLoading) {
+  if (
+    !hasHydrated ||
+    isRestoringSession ||
+    !isUnlocked ||
+    !accessToken ||
+    profileQuery.isLoading
+  ) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-sm text-subtext">
         Проверяем сессию...

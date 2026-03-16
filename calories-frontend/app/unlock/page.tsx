@@ -49,7 +49,10 @@ export default function UnlockPage() {
   const queryClient = useQueryClient();
   const selectedAccountId = useSessionStore((state) => state.selectedAccountId);
   const hasHydrated = useSessionStore((state) => state.hasHydrated);
+  const isRestoringSession = useSessionStore((state) => state.isRestoringSession);
   const biometricEnabled = useSessionStore((state) => state.biometricEnabled);
+  const accessToken = useSessionStore((state) => state.accessToken);
+  const isUnlocked = useSessionStore((state) => state.isUnlocked);
   const setSelectedAccountId = useSessionStore(
     (state) => state.setSelectedAccountId,
   );
@@ -155,7 +158,17 @@ export default function UnlockPage() {
     setSelectedAccountId(accounts[accounts.length - 1].id);
   }, [accounts, selectedAccountId, setSelectedAccountId]);
 
-  if (!hasHydrated) {
+  useEffect(() => {
+    if (!hasHydrated || isRestoringSession) {
+      return;
+    }
+
+    if (isUnlocked && accessToken) {
+      router.replace('/profile-setup');
+    }
+  }, [accessToken, hasHydrated, isRestoringSession, isUnlocked, router]);
+
+  if (!hasHydrated || isRestoringSession) {
     return (
       <ScreenShell
         title="Calories"

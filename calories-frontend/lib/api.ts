@@ -289,6 +289,15 @@ export async function authLogout(): Promise<void> {
   });
 }
 
+export async function authRefresh(): Promise<AuthSession> {
+  return request<AuthSession>("/auth/refresh", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 export async function analyzeMeal(
   token: string,
   input: {

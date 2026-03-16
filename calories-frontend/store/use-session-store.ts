@@ -11,11 +11,13 @@ type SessionState = {
   accessToken: string | null;
   user: SessionUser | null;
   isUnlocked: boolean;
+  isRestoringSession: boolean;
   hasHydrated: boolean;
   setSelectedAccountId: (accountId: string | null) => void;
   setAuthSession: (session: AuthSession) => void;
   lock: () => void;
   toggleBiometrics: (enabled: boolean) => void;
+  setIsRestoringSession: (value: boolean) => void;
   setHasHydrated: (value: boolean) => void;
 };
 
@@ -27,6 +29,7 @@ export const useSessionStore = create<SessionState>()(
       accessToken: null,
       user: null,
       isUnlocked: false,
+      isRestoringSession: false,
       hasHydrated: false,
       setSelectedAccountId: (selectedAccountId) => set({ selectedAccountId }),
       setAuthSession: (session) =>
@@ -36,8 +39,15 @@ export const useSessionStore = create<SessionState>()(
           user: session.user,
           isUnlocked: true
         }),
-      lock: () => set({ isUnlocked: false, accessToken: null, user: null }),
+      lock: () =>
+        set({
+          isUnlocked: false,
+          accessToken: null,
+          user: null,
+          isRestoringSession: false
+        }),
       toggleBiometrics: (enabled) => set({ biometricEnabled: enabled }),
+      setIsRestoringSession: (value) => set({ isRestoringSession: value }),
       setHasHydrated: (value) => set({ hasHydrated: value })
     }),
     {

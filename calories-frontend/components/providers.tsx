@@ -3,6 +3,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { authRefresh } from '@/lib/api';
+import { useSessionStore } from '@/store/use-session-store';
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
@@ -14,6 +17,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }
         }
       })
+  );
+  const [didAttemptSessionRestore, setDidAttemptSessionRestore] = useState(false);
+  const hasHydrated = useSessionStore((state) => state.hasHydrated);
+  const accessToken = useSessionStore((state) => state.accessToken);
+  const isUnlocked = useSessionStore((state) => state.isUnlocked);
+  const setAuthSession = useSessionStore((state) => state.setAuthSession);
+  const setIsRestoringSession = useSessionStore(
+    (state) => state.setIsRestoringSession,
   );
 
   useEffect(() => {
@@ -47,6 +58,49 @@ export function Providers({ children }: { children: React.ReactNode }) {
       // ignore service worker registration errors
     });
   }, []);
+
+  useEffect(() => {
+    if (!hasHydrated || didAttemptSessionRestore) {
+      return;
+    }
+
+    if (isUnlocked && accessToken) {
+      setDidAttemptSessionRestore(true);
+      return;
+    }
+
+    let isCancelled = false;
+    setDidAttemptSessionRestore(true);
+    setIsRestoringSession(true);
+
+    authRefresh()
+      .then((session) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setAuthSession(session);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (isCancelled) {
+          return;
+        }
+
+        setIsRestoringSession(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    accessToken,
+    didAttemptSessionRestore,
+    hasHydrated,
+    isUnlocked,
+    setAuthSession,
+    setIsRestoringSession,
+  ]);
 
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
