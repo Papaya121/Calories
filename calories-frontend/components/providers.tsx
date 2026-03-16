@@ -69,29 +69,27 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    let isCancelled = false;
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      abortController.abort();
+    }, 7000);
+
     setDidAttemptSessionRestore(true);
     setIsRestoringSession(true);
 
-    authRefresh()
+    authRefresh({ signal: abortController.signal })
       .then((session) => {
-        if (isCancelled) {
-          return;
-        }
-
         setAuthSession(session);
       })
       .catch(() => undefined)
       .finally(() => {
-        if (isCancelled) {
-          return;
-        }
-
+        window.clearTimeout(timeoutId);
         setIsRestoringSession(false);
       });
 
     return () => {
-      isCancelled = true;
+      window.clearTimeout(timeoutId);
+      abortController.abort();
     };
   }, [
     accessToken,

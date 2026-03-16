@@ -289,12 +289,15 @@ export async function authLogout(): Promise<void> {
   });
 }
 
-export async function authRefresh(): Promise<AuthSession> {
+export async function authRefresh(input?: {
+  signal?: AbortSignal;
+}): Promise<AuthSession> {
   return request<AuthSession>("/auth/refresh", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    signal: input?.signal,
   });
 }
 
