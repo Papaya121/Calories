@@ -112,7 +112,8 @@ export class AiAnalysisService {
       this.descriptionFromComment(input.comment);
     const rawCaloriesKcal =
       this.pickNumber(aiPayload, ['caloriesKcal', 'calories_kcal']) ?? 600;
-    const rawProteinG = this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28;
+    const rawProteinG =
+      this.pickNumber(aiPayload, ['proteinG', 'protein_g']) ?? 28;
     const rawFatG = this.pickNumber(aiPayload, ['fatG', 'fat_g']) ?? 22;
     const rawCarbsG = this.pickNumber(aiPayload, ['carbsG', 'carbs_g']) ?? 68;
     const parsedWeightG = this.pickNumber(aiPayload, [
@@ -137,7 +138,8 @@ export class AiAnalysisService {
       aiWeightG ??
       this.estimateWeightFromCalories(rawCaloriesKcal);
 
-    const nutritionPer100gPayload = this.extractNutritionPer100gPayload(aiPayload);
+    const nutritionPer100gPayload =
+      this.extractNutritionPer100gPayload(aiPayload);
     const caloriesPer100gKcal = this.normalizeCaloriesPer100gKcal(
       this.pickNumber(aiPayload, [
         'caloriesPer100gKcal',
@@ -182,7 +184,9 @@ export class AiAnalysisService {
     const proteinG = this.roundToOne(
       this.scaleFromPer100(proteinPer100g, estimatedWeightG),
     );
-    const fatG = this.roundToOne(this.scaleFromPer100(fatPer100g, estimatedWeightG));
+    const fatG = this.roundToOne(
+      this.scaleFromPer100(fatPer100g, estimatedWeightG),
+    );
     const carbsG = this.roundToOne(
       this.scaleFromPer100(carbsPer100g, estimatedWeightG),
     );
@@ -270,7 +274,10 @@ export class AiAnalysisService {
     caloriesKcal: number,
     macroBasedCaloriesKcal: number,
   ): number {
-    if (!Number.isFinite(macroBasedCaloriesKcal) || macroBasedCaloriesKcal <= 0) {
+    if (
+      !Number.isFinite(macroBasedCaloriesKcal) ||
+      macroBasedCaloriesKcal <= 0
+    ) {
       return caloriesKcal;
     }
 
@@ -304,7 +311,11 @@ export class AiAnalysisService {
         continue;
       }
 
-      if (unit === 'kg' || unit.startsWith('кг') || unit.startsWith('килограмм')) {
+      if (
+        unit === 'kg' ||
+        unit.startsWith('кг') ||
+        unit.startsWith('килограмм')
+      ) {
         parsedWeightG = numericValue * 1000;
         continue;
       }

@@ -300,11 +300,11 @@ export class AuthService {
     const biologicalSex = user.biologicalSex;
     const isComplete = Boolean(
       biologicalSex &&
-        weightKg &&
-        heightCm &&
-        ageYears &&
-        activityLevel &&
-        goalType,
+      weightKg &&
+      heightCm &&
+      ageYears &&
+      activityLevel &&
+      goalType,
     );
 
     if (
@@ -359,7 +359,10 @@ export class AuthService {
       bmr * ACTIVITY_MULTIPLIERS[activityLevel],
     );
     const minDeficit = biologicalSex === 'male' ? 1400 : 1200;
-    const lose = Math.max(minDeficit, this.roundToNearestTen(maintenance * 0.85));
+    const lose = Math.max(
+      minDeficit,
+      this.roundToNearestTen(maintenance * 0.85),
+    );
     const gain = this.roundToNearestTen(maintenance * 1.15);
 
     return {

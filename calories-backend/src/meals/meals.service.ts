@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Between, Repository } from 'typeorm';
+import { Between, QueryFailedError, Repository } from 'typeorm';
 import { MealEntryEntity, MealPhotoEntity } from '../database/entities';
 import { AnalyzeMealDto } from './dto/analyze-meal.dto';
 import { CreateMealDto } from './dto/create-meal.dto';
@@ -354,16 +354,20 @@ export class MealsService {
   ): Promise<MealEntryEntity[]> {
     this.assertValidTimeZone(timeZone);
 
-    return this.mealEntriesRepository
-      .createQueryBuilder('meal')
-      .leftJoinAndSelect('meal.photos', 'photo')
-      .where('meal.user_id = :userId', { userId })
-      .andWhere('(meal.eaten_at AT TIME ZONE :timeZone)::date = :date', {
-        timeZone,
-        date,
-      })
-      .orderBy('meal.eaten_at', sortDirection)
-      .getMany();
+    try {
+      return this.mealEntriesRepository
+        .createQueryBuilder('meal')
+        .leftJoinAndSelect('meal.photos', 'photo')
+        .where('meal.user_id = :userId', { userId })
+        .andWhere('timezone(:timeZone, meal.eaten_at)::date = :date', {
+          timeZone,
+          date,
+        })
+        .orderBy('meal.eaten_at', sortDirection)
+        .getMany();
+    } catch (error) {
+      this.rethrowTimeZoneQueryError(error);
+    }
   }
 
   private async findMealsByClientDateRange(
@@ -374,20 +378,24 @@ export class MealsService {
   ): Promise<MealEntryEntity[]> {
     this.assertValidTimeZone(timeZone);
 
-    return this.mealEntriesRepository
-      .createQueryBuilder('meal')
-      .leftJoinAndSelect('meal.photos', 'photo')
-      .where('meal.user_id = :userId', { userId })
-      .andWhere(
-        '(meal.eaten_at AT TIME ZONE :timeZone)::date BETWEEN :from AND :to',
-        {
-          timeZone,
-          from,
-          to,
-        },
-      )
-      .orderBy('meal.eaten_at', 'ASC')
-      .getMany();
+    try {
+      return this.mealEntriesRepository
+        .createQueryBuilder('meal')
+        .leftJoinAndSelect('meal.photos', 'photo')
+        .where('meal.user_id = :userId', { userId })
+        .andWhere(
+          'timezone(:timeZone, meal.eaten_at)::date BETWEEN :from AND :to',
+          {
+            timeZone,
+            from,
+            to,
+          },
+        )
+        .orderBy('meal.eaten_at', 'ASC')
+        .getMany();
+    } catch (error) {
+      this.rethrowTimeZoneQueryError(error);
+    }
   }
 
   private assertValidTimeZone(timeZone: string): void {
@@ -396,5 +404,26 @@ export class MealsService {
     } catch {
       throw new BadRequestException('Invalid timeZone value');
     }
+  }
+
+  private rethrowTimeZoneQueryError(error: unknown): never {
+    if (
+      error instanceof QueryFailedError &&
+      typeof (error as QueryFailedError & { driverError?: { code?: string } })
+        .driverError?.code === 'string'
+    ) {
+      const dbError = (
+        error as QueryFailedError & {
+          driverError?: { code?: string; message?: string };
+        }
+      ).driverError;
+
+      const message = dbError?.message?.toLowerCase() ?? '';
+      if (dbError?.code === '22023' && message.includes('time zone')) {
+        throw new BadRequestException('Invalid timeZone value');
+      }
+    }
+
+    throw error;
   }
 }
