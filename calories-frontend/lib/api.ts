@@ -11,7 +11,7 @@ import {
   UserProfile,
 } from "@/lib/types";
 
-const DEFAULT_API_BASE_URL = "http://155.212.191.239:3232/api/v1";
+const DEFAULT_API_BASE_URL = "https://kcalo.ru/api/v1";
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL
 ).replace(/\/+$/, "");
@@ -180,9 +180,12 @@ export function getApiBaseUrl(): string {
 }
 
 export async function authListAccounts(): Promise<AuthAccount[]> {
-  const response = await request<{ accounts: AuthAccount[] }>("/auth/accounts", {
-    method: "GET",
-  });
+  const response = await request<{ accounts: AuthAccount[] }>(
+    "/auth/accounts",
+    {
+      method: "GET",
+    },
+  );
   return response.accounts;
 }
 
