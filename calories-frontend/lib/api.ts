@@ -400,19 +400,36 @@ export async function getDayDetails(
   token: string,
   date: string,
 ): Promise<DayDetailsResponse> {
-  const queryParams = new URLSearchParams({
-    tzOffsetMinutes: getTzOffsetMinutes(),
-  });
+  const tzOffsetMinutes = getTzOffsetMinutes();
   const timeZone = getClientTimeZone();
-  if (timeZone) {
-    queryParams.set("timeZone", timeZone);
-  }
-  const query = queryParams.toString();
 
-  return request<DayDetailsResponse>(`/days/${date}?${query}`, {
-    method: "GET",
-    token,
-  });
+  const baseQueryParams = new URLSearchParams({ tzOffsetMinutes });
+  const withTimeZoneQueryParams = new URLSearchParams(baseQueryParams);
+  if (timeZone) {
+    withTimeZoneQueryParams.set("timeZone", timeZone);
+  }
+
+  try {
+    return await request<DayDetailsResponse>(
+      `/days/${date}?${withTimeZoneQueryParams.toString()}`,
+      {
+        method: "GET",
+        token,
+      },
+    );
+  } catch (error) {
+    if (!(error instanceof ApiError) || !timeZone || error.status < 500) {
+      throw error;
+    }
+
+    return request<DayDetailsResponse>(
+      `/days/${date}?${baseQueryParams.toString()}`,
+      {
+        method: "GET",
+        token,
+      },
+    );
+  }
 }
 
 export async function getCalendarRange(
@@ -426,12 +443,24 @@ export async function getCalendarRange(
     tzOffsetMinutes: getTzOffsetMinutes(),
   });
   const timeZone = getClientTimeZone();
+  const fallbackQueryParams = new URLSearchParams(queryParams);
   if (timeZone) {
     queryParams.set("timeZone", timeZone);
   }
-  const query = queryParams.toString();
-  return request<CalendarRangeResponse>(`/calendar?${query}`, {
-    method: "GET",
-    token,
-  });
+
+  try {
+    return await request<CalendarRangeResponse>(`/calendar?${queryParams}`, {
+      method: "GET",
+      token,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError) || !timeZone || error.status < 500) {
+      throw error;
+    }
+
+    return request<CalendarRangeResponse>(`/calendar?${fallbackQueryParams}`, {
+      method: "GET",
+      token,
+    });
+  }
 }

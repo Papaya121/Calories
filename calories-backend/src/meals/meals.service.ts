@@ -257,9 +257,34 @@ export class MealsService {
     tzOffsetMinutes = 0,
     timeZone?: string,
   ): Promise<MealResponse[]> {
-    const meals = timeZone
-      ? await this.findMealsByClientDate(userId, date, timeZone, 'DESC')
-      : await this.findMealsByDateWithOffset(userId, date, tzOffsetMinutes);
+    let meals: MealEntryEntity[];
+
+    if (timeZone) {
+      try {
+        meals = await this.findMealsByClientDate(
+          userId,
+          date,
+          timeZone,
+          'DESC',
+        );
+      } catch (error) {
+        if (!this.isRecoverableTimeZoneQueryError(error)) {
+          throw error;
+        }
+
+        meals = await this.findMealsByDateWithOffset(
+          userId,
+          date,
+          tzOffsetMinutes,
+        );
+      }
+    } else {
+      meals = await this.findMealsByDateWithOffset(
+        userId,
+        date,
+        tzOffsetMinutes,
+      );
+    }
 
     return meals.map((meal) => this.toMealResponse(meal));
   }
@@ -272,7 +297,18 @@ export class MealsService {
     timeZone?: string,
   ): Promise<MealEntryEntity[]> {
     if (timeZone) {
-      return this.findMealsByClientDateRange(userId, from, to, timeZone);
+      try {
+        return await this.findMealsByClientDateRange(
+          userId,
+          from,
+          to,
+          timeZone,
+        );
+      } catch (error) {
+        if (!this.isRecoverableTimeZoneQueryError(error)) {
+          throw error;
+        }
+      }
     }
 
     const { start: fromDate } = this.resolveUtcDayWindow(from, tzOffsetMinutes);
@@ -354,20 +390,16 @@ export class MealsService {
   ): Promise<MealEntryEntity[]> {
     this.assertValidTimeZone(timeZone);
 
-    try {
-      return this.mealEntriesRepository
-        .createQueryBuilder('meal')
-        .leftJoinAndSelect('meal.photos', 'photo')
-        .where('meal.user_id = :userId', { userId })
-        .andWhere('timezone(:timeZone, meal.eaten_at)::date = :date', {
-          timeZone,
-          date,
-        })
-        .orderBy('meal.eaten_at', sortDirection)
-        .getMany();
-    } catch (error) {
-      this.rethrowTimeZoneQueryError(error);
-    }
+    return this.mealEntriesRepository
+      .createQueryBuilder('meal')
+      .leftJoinAndSelect('meal.photos', 'photo')
+      .where('meal.user_id = :userId', { userId })
+      .andWhere('timezone(:timeZone, meal.eaten_at)::date = :date', {
+        timeZone,
+        date,
+      })
+      .orderBy('meal.eaten_at', sortDirection)
+      .getMany();
   }
 
   private async findMealsByClientDateRange(
@@ -378,24 +410,20 @@ export class MealsService {
   ): Promise<MealEntryEntity[]> {
     this.assertValidTimeZone(timeZone);
 
-    try {
-      return this.mealEntriesRepository
-        .createQueryBuilder('meal')
-        .leftJoinAndSelect('meal.photos', 'photo')
-        .where('meal.user_id = :userId', { userId })
-        .andWhere(
-          'timezone(:timeZone, meal.eaten_at)::date BETWEEN :from AND :to',
-          {
-            timeZone,
-            from,
-            to,
-          },
-        )
-        .orderBy('meal.eaten_at', 'ASC')
-        .getMany();
-    } catch (error) {
-      this.rethrowTimeZoneQueryError(error);
-    }
+    return this.mealEntriesRepository
+      .createQueryBuilder('meal')
+      .leftJoinAndSelect('meal.photos', 'photo')
+      .where('meal.user_id = :userId', { userId })
+      .andWhere(
+        'timezone(:timeZone, meal.eaten_at)::date BETWEEN :from AND :to',
+        {
+          timeZone,
+          from,
+          to,
+        },
+      )
+      .orderBy('meal.eaten_at', 'ASC')
+      .getMany();
   }
 
   private assertValidTimeZone(timeZone: string): void {
@@ -406,24 +434,23 @@ export class MealsService {
     }
   }
 
-  private rethrowTimeZoneQueryError(error: unknown): never {
-    if (
-      error instanceof QueryFailedError &&
-      typeof (error as QueryFailedError & { driverError?: { code?: string } })
-        .driverError?.code === 'string'
-    ) {
-      const dbError = (
-        error as QueryFailedError & {
-          driverError?: { code?: string; message?: string };
-        }
-      ).driverError;
-
-      const message = dbError?.message?.toLowerCase() ?? '';
-      if (dbError?.code === '22023' && message.includes('time zone')) {
-        throw new BadRequestException('Invalid timeZone value');
-      }
+  private isRecoverableTimeZoneQueryError(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) {
+      return false;
     }
 
-    throw error;
+    const dbError = (
+      error as QueryFailedError & {
+        driverError?: { code?: string; message?: string };
+      }
+    ).driverError;
+    const message = dbError?.message?.toLowerCase() ?? '';
+
+    return (
+      message.includes('time zone') ||
+      message.includes('at time zone') ||
+      dbError?.code === '22023' ||
+      dbError?.code === '42883'
+    );
   }
 }
